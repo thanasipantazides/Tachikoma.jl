@@ -94,6 +94,9 @@ end
 
 Set a single pixel at 1-based coordinates. Bounds-checked.
 """
+set_pixel!(img::PixelImage, px::Int, py::Int, color::ColorRGB) =
+    set_pixel!(img, px, py, ColorRGBA(color))
+
 function set_pixel!(img::PixelImage, px::Int, py::Int, color::ColorRGBA)
     (px >= 1 && py >= 1 && px <= img.pixel_w && py <= img.pixel_h) || return
     img.pixels[py, px] = color
@@ -116,6 +119,9 @@ end
 
 Fill a rectangle of pixels. Coordinates are 1-based and clamped.
 """
+fill_rect!(img::PixelImage, x0::Int, y0::Int, x1::Int, y1::Int, color::ColorRGB) =
+    fill_rect!(img, x0, y0, x1, y1, ColorRGBA(color))
+
 function fill_rect!(img::PixelImage, x0::Int, y0::Int, x1::Int, y1::Int, color::ColorRGBA)
     px0 = max(1, x0)
     py0 = max(1, y0)
