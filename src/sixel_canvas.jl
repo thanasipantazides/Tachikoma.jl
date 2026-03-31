@@ -97,6 +97,9 @@ end
 
 Set a single pixel with an explicit color.
 """
+set_pixel!(c::PixelCanvas, px::Int, py::Int, color::ColorRGB) =
+    set_pixel!(c, px, py, ColorRGBA(color))
+
 function set_pixel!(c::PixelCanvas, px::Int, py::Int, color::ColorRGBA)
     (px >= 1 && py >= 1 && px <= c.pixel_w && py <= c.pixel_h) || return
     c.pixels[py, px] = color
@@ -110,6 +113,9 @@ Fill a rectangle of pixels with a single color. Coordinates are 1-based
 and clamped to canvas bounds. Use this instead of looping `set_pixel!`
 for block fills — avoids per-pixel bounds checking overhead.
 """
+fill_pixel_rect!(c::PixelCanvas, x0::Int, y0::Int, x1::Int, y1::Int, color::ColorRGB) =
+    fill_pixel_rect!(c, x0, y0, x1, y1, ColorRGBA(color))
+
 function fill_pixel_rect!(c::PixelCanvas, x0::Int, y0::Int, x1::Int, y1::Int, color::ColorRGBA)
     px0 = max(1, x0)
     py0 = max(1, y0)

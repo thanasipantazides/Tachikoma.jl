@@ -143,6 +143,9 @@ end
 
 Bresenham line drawing at pixel resolution (1-based).
 """
+pixel_line!(img::PixelImage, x0::Int, y0::Int, x1::Int, y1::Int, color::ColorRGB) =
+    pixel_line!(img, x0, y0, x1, y1, ColorRGBA(color))
+
 function pixel_line!(img::PixelImage, x0::Int, y0::Int, x1::Int, y1::Int, color::ColorRGBA)
     dx = abs(x1 - x0)
     dy = abs(y1 - y0)
