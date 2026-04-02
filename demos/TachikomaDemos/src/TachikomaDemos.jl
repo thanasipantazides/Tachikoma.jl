@@ -44,6 +44,7 @@ include("tabbar_demo.jl")
 include("widget_styles_demo.jl")
 include("colortypes_demo.jl")
 include("unicode_demo.jl")
+include("scroll_demo.jl")
 include("launcher.jl")
 
 export demo, rain, dashboard, life, snake, clock, waves, chaos,
@@ -54,6 +55,6 @@ export demo, rain, dashboard, life, snake, clock, waves, chaos,
        fps_demo, phylo_demo, clado_demo, sixel_demo, sixel_gallery,
        async_demo, markdown_demo, windows_demo, terminal_demo, repl_demo,
        ansi_demo, tabbar_demo, widget_styles_demo, colortypes_demo,
-       unicode_demo, launcher
+       unicode_demo, scroll_demo, launcher
 
 end

@@ -164,6 +164,9 @@ const DEMO_ENTRIES = DemoEntry[
     DemoEntry("Markdown Viewer", :widget,
         "Three-mode markdown demo: README viewer with rich formatting, live split-pane editor with real-time preview, and style preset picker.",
         () -> markdown_demo()),
+    DemoEntry("Widget Scroll", :widget,
+        "2D pannable viewport filled with widgets: sparklines, tables, bar charts, gauges, calendars. Click-drag to pan, scroll wheel, arrow keys, Home to reset.",
+        () -> scroll_demo()),
 
     # ── Data ──
     DemoEntry("DataTable", :data,

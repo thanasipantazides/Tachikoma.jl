@@ -17,6 +17,7 @@ mutable struct WidgetScroll
     drag_start_ox::Int       # offset_x at drag start
     drag_start_oy::Int       # offset_y at drag start
     _last_area::Rect         # cached for mouse hit testing
+    _virt_buf::Union{Buffer, Nothing}  # cached virtual buffer (reused across frames)
 end
 
 function WidgetScroll(widget; virtual_width::Int=0, virtual_height::Int=100,
@@ -24,7 +25,7 @@ function WidgetScroll(widget; virtual_width::Int=0, virtual_height::Int=100,
                       show_horizontal_scrollbar::Bool=false)
     WidgetScroll(widget, virtual_width, virtual_height, 0, 0,
                  block, show_vertical_scrollbar, show_horizontal_scrollbar,
-                 false, 0, 0, 0, 0, Rect())
+                 false, 0, 0, 0, 0, Rect(), nothing)
 end
 
 focusable(::WidgetScroll) = true
@@ -127,7 +128,15 @@ function render(ws::WidgetScroll, rect::Rect, buf::Buffer)
         _scroll_needs(ws, inner)
 
     virt_rect = Rect(1, 1, vw, vh)
-    virt_buf = Buffer(virt_rect)
+
+    # Reuse cached virtual buffer if dimensions match, otherwise allocate
+    virt_buf = ws._virt_buf
+    if virt_buf === nothing || virt_buf.area != virt_rect
+        virt_buf = Buffer(virt_rect)
+        ws._virt_buf = virt_buf
+    else
+        reset!(virt_buf)
+    end
 
     # Render widget into virtual buffer
     render(ws.widget, virt_rect, virt_buf)
@@ -136,20 +145,18 @@ function render(ws::WidgetScroll, rect::Rect, buf::Buffer)
     ws.offset_y = clamp(ws.offset_y, 0, max_oy)
     ws.offset_x = clamp(ws.offset_x, 0, max_ox)
 
-    # Copy visible portion to real buffer
+    # Copy visible portion to real buffer (row-wise bulk copy)
+    src_content = virt_buf.content
+    dst_content = buf.content
+    dst_w = buf.area.width
     for dy in 0:(content_h - 1)
         src_y = ws.offset_y + dy + 1
-        dst_y = inner.y + dy
         src_y > vh && break
-        for dx in 0:(content_w - 1)
-            src_x = ws.offset_x + dx + 1
-            dst_x = inner.x + dx
-            src_x > vw && break
-            si = buf_index(virt_buf, src_x, src_y)
-            @inbounds cell = virt_buf.content[si]
-            di = buf_index(buf, dst_x, dst_y)
-            @inbounds buf.content[di] = cell
-        end
+        dst_y = inner.y + dy
+        src_row_start = (src_y - 1) * vw + ws.offset_x
+        dst_row_start = (dst_y - buf.area.y) * dst_w + (inner.x - buf.area.x)
+        n = min(content_w, vw - ws.offset_x)
+        @inbounds copyto!(dst_content, dst_row_start + 1, src_content, src_row_start + 1, n)
     end
 
     # Vertical scrollbar (rightmost column, content rows only)
