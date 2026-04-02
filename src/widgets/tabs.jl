@@ -175,7 +175,7 @@ end
 # ── Label utilities ───────────────────────────────────────────────────
 
 _tab_label_len(s::String) = length(s)
-_tab_label_len(spans::Vector{Span}) = sum(length(s.content) for s in spans; init=0)
+_tab_label_len(spans::Vector{Span}) = sum(textwidth(s.content) for s in spans; init=0)
 
 """Rendered width of a single tab including decoration."""
 _tab_rendered_width(label::TabLabel, ::TabDecoration) = _tab_label_len(label) + 2
@@ -183,21 +183,13 @@ _tab_rendered_width(label::TabLabel, ::PlainTabs) = _tab_label_len(label)
 _tab_rendered_width(label::TabLabel, ::BoxTabs) = _tab_label_len(label) + 4  # │ + pad + label + pad + │
 
 function _render_tab_label!(buf::Buffer, cx::Int, y::Int, label::String, sty::Style, maxcx::Int)
-    for ch in label
-        cx > maxcx && break
-        set_char!(buf, cx, y, ch, sty)
-        cx += 1
-    end
-    cx
+    set_string!(buf, cx, y, label, sty; max_x=maxcx)
 end
 
 function _render_tab_label!(buf::Buffer, cx::Int, y::Int, spans::Vector{Span}, ::Style, maxcx::Int)
     for span in spans
-        for ch in span.content
-            cx > maxcx && break
-            set_char!(buf, cx, y, ch, span.style)
-            cx += 1
-        end
+        cx > maxcx && break
+        cx = set_string!(buf, cx, y, span.content, span.style; max_x=maxcx)
     end
     cx
 end
@@ -317,11 +309,7 @@ function _render_tabs!(bar::TabBar, ::BracketTabs, rect::Rect, buf::Buffer)
     for i in lo:hi
         label = bar.labels[i]
         if i > lo
-            for ch in ts.separator
-                cx > max_rx && break
-                set_char!(buf, cx, y, ch, sep_style)
-                cx += 1
-            end
+            cx = set_string!(buf, cx, y, ts.separator, sep_style; max_x=max_rx)
         end
         cx > max_rx && break
 
@@ -375,11 +363,7 @@ function _render_tabs!(bar::TabBar, ::PlainTabs, rect::Rect, buf::Buffer)
     for i in lo:hi
         label = bar.labels[i]
         if i > lo
-            for ch in ts.separator
-                cx > max_rx && break
-                set_char!(buf, cx, y, ch, sep_style)
-                cx += 1
-            end
+            cx = set_string!(buf, cx, y, ts.separator, sep_style; max_x=max_rx)
         end
         cx > max_rx && break
 

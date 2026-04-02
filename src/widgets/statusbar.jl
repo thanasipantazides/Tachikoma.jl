@@ -27,26 +27,21 @@ function render(bar::StatusBar, rect::Rect, buf::Buffer)
 
     # Render left-aligned spans
     cx = rect.x
+    rx = right(rect)
     for span in bar.left
-        for ch in span.content
-            cx > right(rect) && break
-            set_char!(buf, cx, y, ch, span.style)
-            cx += 1
-        end
+        cx > rx && break
+        cx = set_string!(buf, cx, y, span.content, span.style; max_x=rx)
     end
     left_end = cx
 
     # Compute right-aligned content width
-    right_width = sum(length(span.content) for span in bar.right; init=0)
+    right_width = sum(textwidth(span.content) for span in bar.right; init=0)
 
     # Render right-aligned spans (only if they don't overlap left)
-    rx = right(rect) - right_width + 1
-    rx = max(rx, left_end)  # left takes priority
+    rx2 = right(rect) - right_width + 1
+    rx2 = max(rx2, left_end)  # left takes priority
     for span in bar.right
-        for ch in span.content
-            rx > right(rect) && break
-            set_char!(buf, rx, y, ch, span.style)
-            rx += 1
-        end
+        rx2 > rx && break
+        rx2 = set_string!(buf, rx2, y, span.content, span.style; max_x=rx)
     end
 end

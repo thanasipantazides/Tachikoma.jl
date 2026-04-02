@@ -81,7 +81,7 @@ function _layout_lines(spans::Vector{Span}, width::Int, wrap::WrapMode)
     function add_text!(text::AbstractString, style::Style)
         isempty(text) && return
         push!(current_line, (String(text), style))
-        col += length(text)
+        col += textwidth(text)
     end
 
     for span in spans
@@ -91,49 +91,68 @@ function _layout_lines(spans::Vector{Span}, width::Int, wrap::WrapMode)
                 flush_line!()
             end
 
-            # Convert to Vector{Char} for safe integer indexing (avoids
-            # StringIndexError with multi-byte Unicode characters like ✓, ✗).
-            chars = collect(part)
-            nchars = length(chars)
+            # Use graphemes for correct Unicode handling (combining marks,
+            # multi-codepoint clusters). Each grapheme is one visual unit.
+            graphemes = collect(Base.Unicode.graphemes(part))
+            ngraphs = length(graphemes)
 
             if wrap == no_wrap
                 avail = width - col
                 avail <= 0 && continue
-                text = nchars > avail ? String(chars[1:avail]) : part
-                add_text!(text, span.style)
+                # Take graphemes that fit within available width
+                take_w = 0
+                take_n = 0
+                for g in graphemes
+                    gw = textwidth(g)
+                    take_w + gw > avail && break
+                    take_w += gw
+                    take_n += 1
+                end
+                take_n > 0 && add_text!(join(graphemes[1:take_n]), span.style)
 
             elseif wrap == char_wrap
-                ci = 1
-                while ci <= nchars
+                gi = 1
+                while gi <= ngraphs
                     avail = width - col
                     if avail <= 0
                         flush_line!()
                         avail = width
                     end
-                    take = min(nchars - ci + 1, avail)
-                    add_text!(String(chars[ci:ci+take-1]), span.style)
-                    ci += take
+                    # Take graphemes that fit
+                    take_n = 0
+                    take_w = 0
+                    for idx in gi:ngraphs
+                        gw = textwidth(graphemes[idx])
+                        take_w + gw > avail && break
+                        take_w += gw
+                        take_n += 1
+                    end
+                    # Ensure at least one grapheme per line to avoid infinite loop
+                    take_n = max(take_n, 1)
+                    add_text!(join(graphemes[gi:gi+take_n-1]), span.style)
+                    gi += take_n
                 end
 
             else  # word_wrap
                 i = 1
-                while i <= nchars
-                    # Collect word (non-space chars)
+                while i <= ngraphs
+                    # Collect word (non-space graphemes)
                     j = i
-                    while j <= nchars && chars[j] != ' '
+                    while j <= ngraphs && graphemes[j] != " "
                         j += 1
                     end
-                    word = String(chars[i:j-1])
+                    word = join(graphemes[i:j-1])
+                    wwidth = textwidth(word)
                     # Collect trailing spaces
                     k = j
-                    while k <= nchars && chars[k] == ' '
+                    while k <= ngraphs && graphemes[k] == " "
                         k += 1
                     end
-                    spaces = String(chars[j:k-1])
-                    wlen = j - i  # character count of word
+                    spaces = join(graphemes[j:k-1])
+                    swidth = textwidth(spaces)
 
-                    if wlen == 0
-                        if col + length(spaces) <= width
+                    if wwidth == 0
+                        if col + swidth <= width
                             add_text!(spaces, span.style)
                         end
                         i = k
@@ -141,30 +160,39 @@ function _layout_lines(spans::Vector{Span}, width::Int, wrap::WrapMode)
                     end
 
                     # Wrap if word doesn't fit
-                    if col + wlen > width && col > 0
+                    if col + wwidth > width && col > 0
                         flush_line!()
                     end
 
-                    # Char-break words wider than the line
-                    if wlen > width
-                        wchars = chars[i:j-1]
+                    # Grapheme-break words wider than the line
+                    if wwidth > width
+                        wgraphs = graphemes[i:j-1]
                         wi = 1
-                        while wi <= wlen
+                        wn = length(wgraphs)
+                        while wi <= wn
                             avail = width - col
                             if avail <= 0
                                 flush_line!()
                                 avail = width
                             end
-                            take = min(wlen - wi + 1, avail)
-                            add_text!(String(wchars[wi:wi+take-1]), span.style)
-                            wi += take
+                            take_n = 0
+                            take_w = 0
+                            for idx in wi:wn
+                                gw = textwidth(wgraphs[idx])
+                                take_w + gw > avail && break
+                                take_w += gw
+                                take_n += 1
+                            end
+                            take_n = max(take_n, 1)
+                            add_text!(join(wgraphs[wi:wi+take_n-1]), span.style)
+                            wi += take_n
                         end
                     else
                         add_text!(word, span.style)
                     end
 
                     # Trailing spaces if they fit
-                    if !isempty(spaces) && col + length(spaces) <= width
+                    if !isempty(spaces) && col + swidth <= width
                         add_text!(spaces, span.style)
                     end
 
@@ -198,29 +226,15 @@ function render(p::Paragraph, rect::Rect, buf::Buffer)
         row = content_area.y
         rx = right(content_area)
         for span in p.spans
-            for ch in span.content
-                if ch == '\n'
+            parts = Base.split(span.content, '\n'; keepempty=true)
+            for (pi, part) in enumerate(parts)
+                if pi > 1
                     col = content_area.x
                     row += 1
                     row > bottom(content_area) && return
-                    continue
                 end
                 col > rx && continue
-                w = textwidth(ch)
-                if w == 2
-                    if col + 1 > rx
-                        # Wide char doesn't fit at right boundary
-                        set_char!(buf, col, row, EMPTY_CHAR, span.style)
-                        col += 1
-                        continue
-                    end
-                    set_char!(buf, col, row, ch, span.style)
-                    set_char!(buf, col + 1, row, WIDE_CHAR_PAD, span.style)
-                    col += 2
-                else
-                    set_char!(buf, col, row, ch, span.style)
-                    col += 1
-                end
+                col = set_string!(buf, col, row, part, span.style; max_x=rx)
             end
         end
         return
@@ -255,7 +269,7 @@ function render(p::Paragraph, rect::Rect, buf::Buffer)
         line = lines[line_idx]
 
         # Compute line width for alignment
-        line_width = sum(length(t) for (t, _) in line; init=0)
+        line_width = sum(textwidth(t) for (t, _) in line; init=0)
 
         x_offset = if p.alignment == align_center
             max(0, (text_area.width - line_width) ÷ 2)
@@ -269,23 +283,8 @@ function render(p::Paragraph, rect::Rect, buf::Buffer)
         y = text_area.y + row_idx - 1
         tx = right(text_area)
         for (text, style) in line
-            for ch in text
-                col > tx && break
-                w = textwidth(ch)
-                if w == 2
-                    if col + 1 > tx
-                        set_char!(buf, col, y, EMPTY_CHAR, style)
-                        col += 1
-                        continue
-                    end
-                    set_char!(buf, col, y, ch, style)
-                    set_char!(buf, col + 1, y, WIDE_CHAR_PAD, style)
-                    col += 2
-                else
-                    set_char!(buf, col, y, ch, style)
-                    col += 1
-                end
-            end
+            col > tx && break
+            col = set_string!(buf, col, y, text, style; max_x=tx)
         end
     end
 
