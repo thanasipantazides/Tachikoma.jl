@@ -86,138 +86,248 @@ end
 
 struct DemoEntry
     name::String
+    category::Symbol   # :visual, :widget, :data, :input, :system, :test
     description::String
     launch::Function
 end
 
+const _CATEGORY_LABELS = Dict(
+    :visual  => "Visual",
+    :widget  => "Widgets",
+    :data    => "Data",
+    :input   => "Input",
+    :system  => "System",
+    :test    => "Test",
+)
+
 const DEMO_ENTRIES = DemoEntry[
-    DemoEntry("Theme Gallery",
+    # ── Visual / Animation ──
+    DemoEntry("Theme Gallery", :visual,
         "Color palettes, box styles, block characters, signal bars. Showcases the theme system.",
         () -> demo()),
-    DemoEntry("Dashboard",
-        "Simulated system monitor with CPU/memory gauges, network sparkline, process table, log list.",
-        () -> dashboard()),
-    DemoEntry("Matrix Rain",
+    DemoEntry("Matrix Rain", :visual,
         "Falling katakana and latin characters with brightness falloff. Pure character-buffer animation.",
         () -> rain()),
-    DemoEntry("System Monitor",
-        "3-tab monitor: overview with bar charts and calendar, process table with scrollbar, network canvas plots.",
-        () -> sysmon()),
-    DemoEntry("Clock",
-        "Real-time BigText clock with blinking colon, date display, stopwatch, and calendar widget.",
-        () -> clock()),
-    DemoEntry("Snake",
-        "Classic snake game. Arrow keys to steer, eat food to grow. Speed increases with score.",
-        () -> snake()),
-    DemoEntry("Waves",
+    DemoEntry("Waves", :visual,
         "Animated parametric curves on braille canvas. Lissajous, spirograph, sine, oscilloscope modes.",
         () -> waves()),
-    DemoEntry("Game of Life",
-        "Conway's cellular automaton on braille canvas. Interactive cursor, play/pause, step, randomize.",
-        () -> life()),
-    DemoEntry("Animation System",
-        "Showcases Tween, Spring, Timeline, and easing functions. Four live panels: easing gallery, spring physics, staggered cascade, loop modes.",
-        () -> anim_demo()),
-    DemoEntry("Mouse Draw",
-        "Interactive braille canvas. Left-click to draw, right-click to erase, scroll to resize brush. Showcases mouse event support.",
-        () -> mouse_demo()),
-    DemoEntry("Chaos",
+    DemoEntry("Chaos", :visual,
         "Logistic map bifurcation diagram on braille canvas. Animated cursor scans r from 2.5 to 4.0.",
         () -> chaos()),
-    DemoEntry("Dot Waves",
+    DemoEntry("Dot Waves", :visual,
         "Halftone dot field modulated by layered sine waves and noise. Pulsing, organic wave patterns.",
         () -> dotwave()),
-    DemoEntry("Showcase",
+    DemoEntry("Showcase", :visual,
         "Visual feast: rainbow arc, terrain background, spring gauges, sparklines, particles. Exercises every animation subsystem at once.",
         () -> showcase()),
-    DemoEntry("Backend Compare",
-        "Split-screen: same animation in braille (left), block (center), and PixelImage (right).",
-        () -> backend_demo()),
-    DemoEntry("Resize Panes",
-        "Drag pane borders to resize. Click list items to select. Demonstrates ResizableLayout and list mouse helpers.",
-        () -> resize_demo()),
-    DemoEntry("ScrollPane Log",
-        "Live log viewer with auto-follow, reverse mode, styled spans, mouse wheel, and keyboard scrolling. Three panes showing different ScrollPane content modes.",
-        () -> scrollpane_demo()),
-    DemoEntry("Effects Gallery",
+    DemoEntry("Animation System", :visual,
+        "Showcases Tween, Spring, Timeline, and easing functions. Four live panels: easing gallery, spring physics, staggered cascade, loop modes.",
+        () -> anim_demo()),
+    DemoEntry("Effects Gallery", :visual,
         "Showcase of fill_gradient!, fill_noise!, glow, flicker, drift, Gauge shimmer, TextInput breathing, and Modal pulse effects.",
         () -> effects_demo()),
-    DemoEntry("Chart",
-        "Interactive chart with animated data. Three modes: dual sine/cosine, scatter cloud, and live streaming sparkline. Press [m] to cycle.",
-        () -> chart_demo()),
-    DemoEntry("DataTable",
-        "Sortable, scrollable data table with cyberpunk-themed roster. Arrow keys navigate, number keys [1-4] sort by column.",
-        () -> datatable_demo()),
-    DemoEntry("Paged DataTable",
-        "Virtual data table with 1M rows generated on the fly — zero pre-allocation. Demonstrates the provider interface for out-of-memory data with sort, filter, search, and pagination.",
-        () -> paged_datatable_demo()),
-    DemoEntry("Form",
-        "Form with TextInput, TextArea, Checkbox, RadioGroup, and DropDown. Live preview panel shows values and validation state.",
-        () -> form_demo()),
-    DemoEntry("Code Editor",
-        "Code editor with line numbers, Julia syntax highlighting, auto-indentation, and Tab/Shift-Tab indent control.",
-        () -> editor_demo()),
-    DemoEntry("FPS Stress Test",
-        "Interactive frame rate stress test and monitor. Crank up sparklines, particles, animation complexity, and tokenizer load while watching FPS respond in real time.",
-        () -> fps_demo()),
-    DemoEntry("Phylo Tree",
+    DemoEntry("Phylo Tree", :visual,
         "Radial phylogenetic tree background. Animated branches radiate from center with sway and rotation. Keys 1-4 switch presets.",
         () -> phylo_demo()),
-    DemoEntry("Cladogram",
+    DemoEntry("Cladogram", :visual,
         "Fan-layout cladogram with right-angle polar routing and trait-based coloring. Inspired by Phylo.jl :fan layout. Keys 1-5 switch presets (5=Organic).",
         () -> clado_demo()),
-    DemoEntry("PixelImage Demo",
-        "PixelImage widget showcase: plasma, terrain heightmap, Mandelbrot fractal, interference rings. Renders via sixel on capable terminals, falls back to braille. Press Ctrl+S to adjust decay.",
-        () -> sixel_demo()),
-    DemoEntry("Sixel Gallery",
-        "Performance monitor dashboard using PixelImage widgets: CPU heatmap, latency distribution, memory page map, flame graph. Demonstrates bounded sixel rendering alongside text widgets.",
-        () -> sixel_gallery()),
-    DemoEntry("Async Tasks",
-        "Background task system demo. Spawn compute tasks, trigger failures, launch batches of 5, and toggle a repeating timer. Results arrive without blocking the UI.",
-        () -> async_demo()),
-    DemoEntry("ANSI Text",
-        "ANSI escape sequence showcase. Side-by-side comparison: parsed ANSI with colors and styles (left) vs raw text (right). Demonstrates parse_ansi, per-widget ansi override, and auto-follow log.",
-        () -> ansi_demo()),
-    DemoEntry("TabBar",
-        "Stateful tab bar with handle_key! and value(). Three tabs: system overview with sparklines, live activity log, and settings with checkboxes. Demonstrates the recommended pattern for TabBar in the Elm architecture.",
+
+    # ── Widget Showcases ──
+    DemoEntry("Dashboard", :widget,
+        "Simulated system monitor with CPU/memory gauges, network sparkline, process table, log list.",
+        () -> dashboard()),
+    DemoEntry("System Monitor", :widget,
+        "3-tab monitor: overview with bar charts and calendar, process table with scrollbar, network canvas plots.",
+        () -> sysmon()),
+    DemoEntry("Clock", :widget,
+        "Real-time BigText clock with blinking colon, date display, stopwatch, and calendar widget.",
+        () -> clock()),
+    DemoEntry("Chart", :widget,
+        "Interactive chart with animated data. Three modes: dual sine/cosine, scatter cloud, and live streaming sparkline. Press [m] to cycle.",
+        () -> chart_demo()),
+    DemoEntry("TabBar", :widget,
+        "Stateful tab bar with handle_key! and value(). Three tabs: system overview with sparklines, live activity log, and settings with checkboxes.",
         () -> tabbar_demo()),
-    DemoEntry("Widget Styles",
-        "Showcase of the widget styling system. Compare BracketTabs, BoxTabs (plain and heavy), and PlainTabs side by side. Also shows BracketButton, BorderedButton, and PlainButton decorations.",
+    DemoEntry("Widget Styles", :widget,
+        "Compare BracketTabs, BoxTabs (plain and heavy), and PlainTabs side by side. Also shows BracketButton, BorderedButton, and PlainButton decorations.",
         () -> widget_styles_demo()),
-    DemoEntry("Markdown Viewer",
-        "Three-mode markdown demo: README viewer with rich formatting, live split-pane editor with real-time preview, and style preset picker. Uses the CommonMark.jl extension.",
+    DemoEntry("ScrollPane Log", :widget,
+        "Live log viewer with auto-follow, reverse mode, styled spans, mouse wheel, and keyboard scrolling. Three panes showing different ScrollPane content modes.",
+        () -> scrollpane_demo()),
+    DemoEntry("Backend Compare", :widget,
+        "Split-screen: same animation in braille (left), block (center), and PixelImage (right).",
+        () -> backend_demo()),
+    DemoEntry("ANSI Text", :widget,
+        "ANSI escape sequence showcase. Parsed ANSI with colors and styles (left) vs raw text (right). Demonstrates parse_ansi and auto-follow log.",
+        () -> ansi_demo()),
+    DemoEntry("Markdown Viewer", :widget,
+        "Three-mode markdown demo: README viewer with rich formatting, live split-pane editor with real-time preview, and style preset picker.",
         () -> markdown_demo()),
-    DemoEntry("Terminal Emulator",
-        "Shell terminals and Julia REPLs in floating windows. Ctrl+N spawns a terminal, Ctrl+E spawns a REPL, Ctrl+U goes recursive (turtles all the way down). Ctrl+T tiles them. Drag and resize windows freely.",
+
+    # ── Data ──
+    DemoEntry("DataTable", :data,
+        "Sortable, scrollable data table with cyberpunk-themed roster. Arrow keys navigate, number keys [1-4] sort by column.",
+        () -> datatable_demo()),
+    DemoEntry("Paged DataTable", :data,
+        "Virtual data table with 1M rows generated on the fly — zero pre-allocation. Provider interface for out-of-memory data with sort, filter, search, and pagination.",
+        () -> paged_datatable_demo()),
+
+    # ── Input / Interaction ──
+    DemoEntry("Snake", :input,
+        "Classic snake game. Arrow keys to steer, eat food to grow. Speed increases with score.",
+        () -> snake()),
+    DemoEntry("Game of Life", :input,
+        "Conway's cellular automaton on braille canvas. Interactive cursor, play/pause, step, randomize.",
+        () -> life()),
+    DemoEntry("Mouse Draw", :input,
+        "Interactive braille canvas. Left-click to draw, right-click to erase, scroll to resize brush.",
+        () -> mouse_demo()),
+    DemoEntry("Resize Panes", :input,
+        "Drag pane borders to resize. Click list items to select. Demonstrates ResizableLayout and list mouse helpers.",
+        () -> resize_demo()),
+    DemoEntry("Form", :input,
+        "Form with TextInput, TextArea, Checkbox, RadioGroup, and DropDown. Live preview panel shows values and validation state.",
+        () -> form_demo()),
+    DemoEntry("Code Editor", :input,
+        "Code editor with line numbers, Julia syntax highlighting, auto-indentation, and Tab/Shift-Tab indent control.",
+        () -> editor_demo()),
+
+    # ── System / Graphics ──
+    DemoEntry("PixelImage Demo", :system,
+        "PixelImage widget showcase: plasma, terrain heightmap, Mandelbrot fractal, interference rings. Renders via sixel on capable terminals, falls back to braille.",
+        () -> sixel_demo()),
+    DemoEntry("Sixel Gallery", :system,
+        "Performance monitor dashboard using PixelImage widgets: CPU heatmap, latency distribution, memory page map, flame graph.",
+        () -> sixel_gallery()),
+    DemoEntry("Floating Windows", :widget,
+        "Overlapping windows with z-order, semi-transparent blending, sparklines, forms, and DataTable inside windows. Title-bar dragging, corner resizing, focus cycling, animated tile and cascade layouts.",
+        () -> windows_demo()),
+    DemoEntry("Terminal Emulator", :system,
+        "Shell terminals and Julia REPLs in floating windows. Ctrl+N spawns a terminal, Ctrl+E spawns a REPL, Ctrl+U goes recursive. Ctrl+T tiles them.",
         () -> terminal_demo()),
-    DemoEntry("Julia REPL",
+    DemoEntry("Julia REPL", :system,
         "Multiple in-process Julia REPLs in floating windows. Each REPL shares the host's modules and variables. Ctrl+N spawns new REPLs, Ctrl+T tiles them.",
         () -> repl_demo()),
-    DemoEntry("ColorTypes Interop",
-        "Verify ColorTypes.jl extension: to_rgb, to_rgba, to_colortype conversions between Tachikoma and ColorTypes color types. Roundtrip tests.",
+    DemoEntry("Async Tasks", :system,
+        "Background task system demo. Spawn compute tasks, trigger failures, launch batches of 5, and toggle a repeating timer. Results arrive without blocking the UI.",
+        () -> async_demo()),
+    DemoEntry("FPS Stress Test", :system,
+        "Interactive frame rate stress test and monitor. Crank up sparklines, particles, animation complexity, and tokenizer load while watching FPS respond in real time.",
+        () -> fps_demo()),
+
+    # ── Test / Verification ──
+    DemoEntry("Unicode & Graphemes", :test,
+        "Zero-width combining marks, precomposed glyphs, CJK wide characters, and mixed-width text across Paragraph, Table, TabBar, and StatusBar.",
+        () -> unicode_demo()),
+    DemoEntry("ColorTypes Interop", :test,
+        "Verify ColorTypes.jl extension: to_rgb, to_rgba, to_colortype conversions between Tachikoma and ColorTypes color types.",
         () -> colortypes_demo()),
 ]
+
+# ── Build category tree from demo entries ────────────────────────────
+
+# Ordered list of categories for display
+const _CATEGORY_ORDER = [:visual, :widget, :data, :input, :system, :test]
+
+function _build_demo_tree()
+    # Group entries by category, preserving order
+    groups = Dict{Symbol, Vector{Int}}()
+    for (i, e) in enumerate(DEMO_ENTRIES)
+        push!(get!(groups, e.category, Int[]), i)
+    end
+
+    cat_nodes = TreeNode[]
+    for cat in _CATEGORY_ORDER
+        haskey(groups, cat) || continue
+        indices = groups[cat]
+        children = [TreeNode(DEMO_ENTRIES[i].name; expanded=false)
+                    for i in indices]
+        label = get(_CATEGORY_LABELS, cat, string(cat))
+        push!(cat_nodes, TreeNode(label, children; expanded=true))
+    end
+
+    TreeNode("Demos", cat_nodes; expanded=true)
+end
+
+# Map a flattened tree row (excluding root) to a DEMO_ENTRIES index.
+# Returns 0 for category nodes, >0 for leaf demos.
+function _flat_row_to_demo_idx(tree::TreeView)
+    flat = Tachikoma._get_flat(tree)
+    sel = tree.selected
+    (sel < 1 || sel > length(flat)) && return 0
+    row = flat[sel]
+    row.has_children && return 0  # category node, not a demo
+
+    # Walk DEMO_ENTRIES by category order to find the matching index
+    demo_idx = 0
+    for cat in _CATEGORY_ORDER
+        for (i, e) in enumerate(DEMO_ENTRIES)
+            e.category != cat && continue
+            demo_idx += 1
+            if row.label == e.name
+                return i  # return real DEMO_ENTRIES index
+            end
+        end
+    end
+    return 0
+end
+
+# Get the DemoEntry for the currently selected tree row (or nothing)
+function _selected_entry(tree::TreeView)
+    idx = _flat_row_to_demo_idx(tree)
+    idx > 0 ? DEMO_ENTRIES[idx] : nothing
+end
 
 # ── Launcher model ───────────────────────────────────────────────────
 
 @kwdef mutable struct LauncherModel <: Model
     quit::Bool = false
-    selected::Int = 1
     launch_idx::Int = 0   # 0 = stay in menu, >0 = demo index to launch
     tick::Int = 0
+    tree::TreeView = TreeView(_build_demo_tree();
+        selected=2, focused=true, show_root=false,
+        block=Block(title="Demos ($(length(DEMO_ENTRIES)))",
+                    border_style=tstyle(:border),
+                    title_style=tstyle(:title)),
+        selected_style=tstyle(:accent, bold=true),
+        connector_style=tstyle(:text_dim))
 end
 
 should_quit(m::LauncherModel) = m.quit || m.launch_idx > 0
 
 function update!(m::LauncherModel, evt::KeyEvent)
-    n = length(DEMO_ENTRIES)
-    @match (evt.key, evt.char) begin
-        (:char, 'q') || (:escape, _)  => (m.quit = true)
-        (:up, _) || (:char, 'k')      => (m.selected = m.selected > 1 ? m.selected - 1 : n)
-        (:down, _) || (:char, 'j')    => (m.selected = m.selected < n ? m.selected + 1 : 1)
-        (:enter, _)                    => (m.launch_idx = m.selected)
-        _                              => nothing
+    if evt.key == :char && evt.char == 'q' || evt.key == :escape
+        m.quit = true
+        return
     end
+    if evt.key == :enter
+        idx = _flat_row_to_demo_idx(m.tree)
+        if idx > 0
+            m.launch_idx = idx
+            return
+        end
+    end
+    handle_key!(m.tree, evt)
+end
+
+function update!(m::LauncherModel, evt::MouseEvent)
+    if evt.action == mouse_press && evt.button == mouse_left
+        # Double-click detection: if clicking the already-selected leaf, launch it
+        old_sel = m.tree.selected
+        old_entry = _selected_entry(m.tree)
+        handled = handle_mouse!(m.tree, evt)
+        if handled && old_sel == m.tree.selected && old_entry !== nothing
+            # Clicked same leaf row again → launch
+            idx = _flat_row_to_demo_idx(m.tree)
+            if idx > 0
+                m.launch_idx = idx
+                return
+            end
+        end
+        return
+    end
+    handle_mouse!(m.tree, evt)
 end
 
 function view(m::LauncherModel, f::Frame)
@@ -266,7 +376,7 @@ function view(m::LauncherModel, f::Frame)
     sub_y = header_area.y + 2 + _LOGO_H + 1
     if sub_y <= bottom(header_area) - 1
         subtitle = "── Terminal UI Framework ──"
-        sx = header_area.x + max(0, (header_area.width - length(subtitle)) ÷ 2)
+        sx = header_area.x + max(0, (header_area.width - textwidth(subtitle)) ÷ 2)
         br = breathe(m.tick; period=120)
         sub_color = color_lerp(to_rgb(th.text_dim), to_rgb(th.accent), br * 0.5)
         set_string!(buf, sx, sub_y, subtitle, Style(fg=sub_color))
@@ -278,17 +388,9 @@ function view(m::LauncherModel, f::Frame)
     list_area = cols[1]
     desc_area = cols[2]
 
-    # Demo list via SelectableList (handles scrolling + highlight)
-    demo_items = [ListItem(e.name) for e in DEMO_ENTRIES]
-    demo_list = SelectableList(demo_items;
-        selected=m.selected,
-        block=Block(title="Demos",
-                    border_style=tstyle(:border),
-                    title_style=tstyle(:title)),
-        highlight_style=tstyle(:accent, bold=true),
-        tick=m.tick,
-    )
-    render(demo_list, list_area, buf)
+    # Demo tree
+    m.tree.tick = m.tick
+    render(m.tree, list_area, buf)
 
     # Description panel
     desc_block = Block(title="Description",
@@ -296,46 +398,42 @@ function view(m::LauncherModel, f::Frame)
                        title_style=tstyle(:title))
     desc_inner = render(desc_block, desc_area, buf)
 
-    if 1 <= m.selected <= length(DEMO_ENTRIES)
-        entry = DEMO_ENTRIES[m.selected]
+    entry = _selected_entry(m.tree)
+    if entry !== nothing
+        dy = 0
 
-        # Name
-        set_string!(buf, desc_inner.x, desc_inner.y,
+        # Name — bold primary
+        set_string!(buf, desc_inner.x, desc_inner.y + dy,
                     entry.name, tstyle(:primary, bold=true))
-
-        # Description — word-wrap to panel width
-        max_w = desc_inner.width
-        words = Base.split(entry.description)
-        line = ""
-        dy = 2
-        for word in words
-            test = isempty(line) ? word : line * " " * word
-            if length(test) > max_w && !isempty(line)
-                set_string!(buf, desc_inner.x, desc_inner.y + dy,
-                            line, tstyle(:text))
-                dy += 1
-                line = string(word)
-            else
-                line = test
-            end
-        end
-        if !isempty(line)
-            set_string!(buf, desc_inner.x, desc_inner.y + dy,
-                        line, tstyle(:text))
-            dy += 1
-        end
-
-        # Launch hint — gentle pulse
         dy += 1
-        if desc_inner.y + dy <= bottom(desc_inner)
+
+        # Category badge
+        cat_label = get(_CATEGORY_LABELS, entry.category, "")
+        set_string!(buf, desc_inner.x, desc_inner.y + dy,
+                    cat_label, tstyle(:accent))
+        dy += 2
+
+        # Description — use Paragraph with word wrap
+        desc_h = max(1, desc_inner.height - dy - 3)
+        if desc_h > 0 && desc_inner.y + dy <= bottom(desc_inner)
+            desc_rect = Rect(desc_inner.x, desc_inner.y + dy,
+                             desc_inner.width, desc_h)
+            p = Paragraph(entry.description; wrap=word_wrap)
+            render(p, desc_rect, buf)
+            dy += desc_h
+        end
+
+        # Launch hint — gentle pulse, pinned to bottom
+        hint_y = bottom(desc_inner)
+        if hint_y > desc_inner.y + 3
             hint_color = if animations_enabled()
                 p = breathe(m.tick; period=100)
                 color_lerp(th.text_dim, th.accent, 0.4 + p * 0.6)
             else
                 th.accent
             end
-            set_string!(buf, desc_inner.x, desc_inner.y + dy,
-                        "Press Enter to launch", Style(fg=hint_color))
+            set_string!(buf, desc_inner.x, hint_y,
+                        "▸ Press Enter to launch", Style(fg=hint_color, bold=true))
         end
     end
 
@@ -345,22 +443,34 @@ function view(m::LauncherModel, f::Frame)
               SPINNER_BRAILLE[si], tstyle(:accent))
 
     render(StatusBar(
-        left=[Span("  [↑↓/jk]select [Enter]launch [Ctrl+\\]theme [Ctrl+?]help ",
-                    tstyle(:text_dim))],
-        right=[Span("[q/Esc]quit ", tstyle(:text_dim))],
+        left=[Span("  ↑↓ ", tstyle(:accent)),
+              Span("select  ", tstyle(:text_dim)),
+              Span("Enter ", tstyle(:accent)),
+              Span("launch  ", tstyle(:text_dim)),
+              Span("Ctrl+\\ ", tstyle(:accent)),
+              Span("theme  ", tstyle(:text_dim)),
+              Span("Ctrl+? ", tstyle(:accent)),
+              Span("help", tstyle(:text_dim))],
+        right=[Span("$(m.tree.selected)/$(Tachikoma.tree_visible_count(m.tree))  ", tstyle(:text_dim)),
+               Span("q ", tstyle(:accent)),
+               Span("quit ", tstyle(:text_dim))],
     ), footer_area, buf)
 end
 
 function launcher(; theme_name=nothing)
     theme_name !== nothing && set_theme!(theme_name)
+    model = LauncherModel()
     while true
-        model = LauncherModel()
         result = app(model; fps=30)
         result === :restart && continue
         model.launch_idx == 0 && break
         # Launch selected demo, return to menu on exit
+        idx = model.launch_idx
+        model.quit = false
+        model.launch_idx = 0
+        model.tick = 0
         try
-            DEMO_ENTRIES[model.launch_idx].launch()
+            DEMO_ENTRIES[idx].launch()
         catch e
             e isa InterruptException && rethrow()
             @warn "Demo exited with error" exception=(e, catch_backtrace())

@@ -161,14 +161,35 @@ function _append_glyph!(buf::Buffer, x::Int, y::Int, glyph::AbstractString)
     end
 end
 
+# Fast check: true if string has no multi-byte chars or combining marks.
+# When true, we can skip grapheme segmentation and use the fast char path.
+@inline function _is_simple_latin(s::AbstractString)
+    @inbounds for i in 1:ncodeunits(s)
+        codeunit(s, i) > 0x7f && return false
+    end
+    true
+end
+
 function set_string!(buf::Buffer, x::Int, y::Int,
                      str::AbstractString,
                      style::Style=RESET;
                      max_x::Int=right(buf.area))
     clean = _strip_ansi(str)
     col = x
-    last_drawn_col = x - 1
     clip = min(max_x, right(buf.area))
+
+    # Fast path: pure ASCII — no grapheme segmentation needed
+    if _is_simple_latin(clean)
+        for ch in clean
+            col > clip && break
+            in_bounds(buf, col, y) && set_char!(buf, col, y, ch, style)
+            col += 1
+        end
+        return col
+    end
+
+    # Slow path: grapheme-aware for combining marks and wide chars
+    last_drawn_col = x - 1
     for grapheme in Base.Unicode.graphemes(clean)
         glyph = String(grapheme)
         col > clip && break

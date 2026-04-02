@@ -12,7 +12,7 @@
         using TachikomaDemos
         m = TachikomaDemos.LauncherModel()
         @assert m.quit == false
-        @assert m.selected == 1
+        @assert m.tree.selected > 0
         @assert length(TachikomaDemos.DEMO_ENTRIES) > 0
         print(length(TachikomaDemos.DEMO_ENTRIES))
         """

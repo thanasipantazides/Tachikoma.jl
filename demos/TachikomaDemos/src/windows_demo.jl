@@ -68,7 +68,7 @@ function _ensure_windows!(m::WindowsDemoModel, area::Rect)
         FormField("Notify",  Checkbox("Enable alerts"; checked=false)),
         FormField("Level",   RadioGroup(["Low", "Medium", "High"])),
         FormField("Mode",    DropDown(["Auto", "Manual", "Scheduled", "Burst"])),
-        FormField("Action",  Button("Run Task"; bordered=true)),
+        FormField("Action",  Button("Run Task"; button_style=ButtonStyle(decoration=BorderedButton()))),
     ]; submit_label="Apply", bordered_submit=true)
 
     # Create DataTable widget (enough rows to exercise wheel scrolling)
