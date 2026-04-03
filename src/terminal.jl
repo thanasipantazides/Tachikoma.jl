@@ -589,6 +589,7 @@ mutable struct PixelFramebuffer
     width::Int               # pixels
     height::Int              # pixels
     dirty::Bool
+    _cleared::Bool           # true after RGBA data has been zeroed this frame
     dirty_x0::Int            # pixel bounding box of dirty region
     dirty_y0::Int
     dirty_x1::Int
@@ -597,7 +598,7 @@ mutable struct PixelFramebuffer
     render_rects::Vector{Rect}
 end
 
-const _PIXEL_FB = PixelFramebuffer(UInt8[], 0, 0, false, 0, 0, 0, 0, Rect[])
+const _PIXEL_FB = PixelFramebuffer(UInt8[], 0, 0, false, false, 0, 0, 0, 0, Rect[])
 
 """Clear/resize framebuffer, filling with cell background colors from the buffer."""
 function _fb_init!(fb::PixelFramebuffer, buf::Buffer, area::Rect)
@@ -614,10 +615,10 @@ function _fb_init!(fb::PixelFramebuffer, buf::Buffer, area::Rect)
         fb.height = ph
     end
 
-    # Fill with transparent black — pixels that are never written won't be encoded
-    fill!(fb.rgba, 0x00)
-
+    # Defer the expensive fill to _fb_clear! — only called when
+    # the framebuffer is actually used (first _fb_blend! of the frame).
     fb.dirty = false
+    fb._cleared = false
     empty!(fb.render_rects)
     fb.dirty_x0 = pw + 1
     fb.dirty_y0 = ph + 1
@@ -625,9 +626,17 @@ function _fb_init!(fb::PixelFramebuffer, buf::Buffer, area::Rect)
     fb.dirty_y1 = 0
 end
 
+# Zero the framebuffer RGBA data. Called lazily on first blend each frame.
+function _fb_clear!(fb::PixelFramebuffer)
+    fb._cleared && return
+    fill!(fb.rgba, 0x00)
+    fb._cleared = true
+end
+
 """Blend RGBA image into the framebuffer at the given cell position."""
 function _fb_blend!(fb::PixelFramebuffer, rgba::Vector{UInt8}, w::Int, h::Int,
                     area::Rect, screen_area::Rect, buf::Buffer)
+    _fb_clear!(fb)  # lazy clear on first blend each frame
     cp = CELL_PX[]
     cpw = max(1, cp.w)
     cph = max(1, cp.h)
@@ -945,9 +954,10 @@ function draw!(func::Function, t::Terminal)
     io = IOBuffer()
     write(io, SYNC_START)
     has_sixel = any(r -> r.format == gfx_fmt_sixel, visible_regions)
-    if resized
-        # Terminal was resized: clear screen inside the sync block to avoid a
-        # blank-screen flash between the clear and the redrawn content.
+    if resized || t.frame_count <= 1
+        # Terminal was resized (or first frame): clear screen inside the sync
+        # block to avoid a blank-screen flash between the clear and the
+        # redrawn content. First-frame clear ensures clean initial state.
         write(io, CLEAR_SCREEN)
         reset!(previous_buf(t))
     elseif t.frame_count % t.clear_interval == 0 && has_sixel && !_PIXEL_FB.dirty

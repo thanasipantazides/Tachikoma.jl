@@ -563,7 +563,7 @@
         # render_rects covers the full screen (simulates render_rgba! targeting all cells)
         fb = T.PixelFramebuffer(
             Vector{UInt8}(undef, pw * ph * 4),
-            pw, ph, true, 1, 1, pw, ph, [screen_area])
+            pw, ph, true, true, 1, 1, pw, ph, [screen_area])
         for i in 0:(pw * ph - 1)
             fb.rgba[i * 4 + 1] = 0xff  # R
             fb.rgba[i * 4 + 2] = 0x00  # G

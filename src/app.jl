@@ -1042,23 +1042,17 @@ function app(model::Model; fps=60, default_bindings=true, on_stdout=nothing, on_
             end
         end
 
-        # ── Frame timer: ensures minimum fps for animations ──
-        frame_timer = Timer(0; interval=frame_interval) do _
-            _try_put!(wake)
-        end
-
         try
-            frame_ns = round(UInt64, frame_interval * 1e9)
-            last_draw_ns = UInt64(0)
+            next_frame = time()
 
             while !should_quit(model) && !overlay.restart
-                # Block on wake channel only if frame interval hasn't elapsed.
-                # When skipping (view took longer than frame budget), yield
-                # so the stdin monitor task can deliver key events.
-                if time_ns() - last_draw_ns < frame_ns
-                    take!(wake)
-                else
-                    yield()
+                # ── Frame pacing: deadline-based with cooperative sleep ──
+                # sleep() yields to the Julia scheduler so sixel encoding
+                # and other async tasks can run between frames.
+                now = time()
+                pending = Base.invokelatest(has_pending_output, model)
+                if !pending && now < next_frame
+                    sleep(next_frame - now)
                 end
 
                 # Process all buffered stdin
@@ -1066,6 +1060,10 @@ function app(model::Model; fps=60, default_bindings=true, on_stdout=nothing, on_
                     evt = read_event()
                     evt isa KeyEvent && (evt = _track_key_state!(evt))
                     Base.invokelatest(dispatch_event!, t, overlay, model, evt, default_bindings)
+                end
+                # Drain wake channel (non-blocking) to clear async signals
+                while isready(wake)
+                    take!(wake)
                 end
                 # Drain async task queues
                 drain_tasks!(_framework_tasks) do tevt
@@ -1086,10 +1084,10 @@ function app(model::Model; fps=60, default_bindings=true, on_stdout=nothing, on_
                     end
                 end
 
-                # Frame pacing: only render when the frame interval has elapsed.
-                now_ns = time_ns()
-                if now_ns - last_draw_ns < frame_ns
-                    continue
+                # Advance frame deadline
+                next_frame += frame_interval
+                if next_frame < time()
+                    next_frame = time()
                 end
 
                 # Update recording countdown notification
@@ -1104,7 +1102,6 @@ function app(model::Model; fps=60, default_bindings=true, on_stdout=nothing, on_
                         overlay.notify_ttl = 0
                     end
                 end
-                last_draw_ns = time_ns()
                 Base.invokelatest(pre_render!, model)
                 draw!(t) do f
                     Base.invokelatest() do
@@ -1146,7 +1143,6 @@ function app(model::Model; fps=60, default_bindings=true, on_stdout=nothing, on_
             _app_error[] = e
             _app_bt[] = catch_backtrace()
         finally
-            close(frame_timer)
             close(wake)  # unblocks stdin_monitor + any pending take!
             _restarting[] = overlay.restart
             close(_framework_tasks.channel)
