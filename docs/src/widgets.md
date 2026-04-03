@@ -15,6 +15,8 @@ valid(widget)            # check if the current value is valid (default: true)
 
 ## Text Display
 
+All text rendering in Tachikoma is grapheme-aware. Unicode combining marks (e.g. `ṅ`, `n̈`), precomposed characters, and CJK wide characters are handled correctly across all widgets. Combining marks attach to their base character without consuming an extra cell, and wide characters occupy two cells with proper alignment.
+
 ### Block
 
 Bordered panel with optional title. The workhorse container widget:
@@ -769,6 +771,31 @@ Standalone scrollbar indicator:
 sb = Scrollbar(100, 20, 0)
 render(sb, area, buf)
 ```
+
+### WidgetScroll
+
+Scrollable 2D viewport that wraps any widget. Renders the inner widget into a virtual buffer larger than the viewport, then displays the visible portion with optional scrollbars.
+
+<!-- tachi:noeval -->
+```julia
+ws = WidgetScroll(my_widget;
+    virtual_width=200, virtual_height=120,
+    block=Block(title="Viewport"),
+    show_vertical_scrollbar=true,
+    show_horizontal_scrollbar=false)
+render(ws, area, buf)
+```
+
+Navigation:
+
+<!-- tachi:noeval -->
+```julia
+handle_key!(ws, evt)     # arrow keys, Page Up/Down, Home/End
+handle_mouse!(ws, evt)   # click-drag panning, scroll wheel
+value(ws)                # returns (offset_x, offset_y)
+```
+
+The virtual buffer is cached and reused across frames to avoid per-frame allocation.
 
 ### ProgressList / ProgressItem
 

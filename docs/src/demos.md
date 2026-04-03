@@ -1,6 +1,6 @@
 # Demos
 
-The `demos/TachikomaDemos` package includes 25+ interactive demos covering every major feature. Run the launcher to browse them all, or launch individual demos directly.
+The `demos/TachikomaDemos` package includes 35+ interactive demos covering every major feature. Run the launcher to browse them all, or launch individual demos directly.
 
 ## Running the Demos
 
@@ -13,7 +13,7 @@ using TachikomaDemos
 launcher()
 ```
 
-The launcher presents a menu of all available demos. Use arrow keys to navigate and Enter to launch.
+The launcher presents a categorized tree of all available demos. Use arrow keys to navigate, Left/Right to collapse/expand categories, Enter to launch. Mouse click and scroll wheel are also supported.
 
 To run a specific demo directly:
 
@@ -57,5 +57,12 @@ dashboard()
 | **Sixel Gallery** | `sixel_gallery()` | CPU heatmap, latency distribution, memory page map, flame graph |
 | **Async Tasks** | `async_demo()` | Background task system: spawn tasks, trigger failures, repeating timers |
 | **Markdown Viewer** | `markdown_demo()` | README viewer, live split-pane editor, style preset picker |
+| **ANSI Text** | `ansi_demo()` | ANSI escape sequence showcase: parsed colors/styles vs raw text, auto-follow log |
+| **TabBar** | `tabbar_demo()` | Tab bar styles, overflow, per-tab colors, mouse support |
+| **Widget Styles** | `widget_styles_demo()` | BracketTabs, BoxTabs, PlainTabs, button decoration comparison |
+| **Floating Windows** | `windows_demo()` | Overlapping windows with z-order, transparency, drag/resize, sparklines and forms inside |
 | **Terminal Emulator** | `terminal_demo()` | Embedded shell in a FloatingWindow with PTY, ANSI colors, Ctrl+N for multiple terminals |
 | **Julia REPL** | `repl_demo()` | In-process Julia REPL in a FloatingWindow, shared state, tab completion, Pkg mode |
+| **Widget Scroll** | `scroll_demo()` | 2D pannable viewport: sparklines, tables, bar charts, gauges across a large virtual space |
+| **Unicode & Graphemes** | `unicode_demo()` | Zero-width combining marks, CJK wide characters, mixed-width text across widgets |
+| **ColorTypes Interop** | `colortypes_demo()` | ColorTypes.jl extension: roundtrip conversions between Tachikoma and ColorTypes colors |
