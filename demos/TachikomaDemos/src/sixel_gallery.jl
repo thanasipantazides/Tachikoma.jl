@@ -12,8 +12,18 @@
 #   0–5   — focus pane (0 = all, 1–5 = individual)
 #   z/Tab — cycle pane focus
 #   p     — pause simulation
+#   b     — cycle flame pane background (custom colors / canvas-tracked)
+#   t     — toggle light/dark theme (demos bg tracking vs custom)
 #   q/Esc — quit
 # ═══════════════════════════════════════════════════════════════════════
+
+# Flame-pane background presets.  `nothing` means "track canvas_bg()".
+const _FLAME_BG_PRESETS = (
+    ("indigo",  ColorRGBA(0x28, 0x1c, 0x50)),
+    ("crimson", ColorRGBA(0x50, 0x14, 0x1e)),
+    ("forest",  ColorRGBA(0x10, 0x38, 0x20)),
+    ("tracked", nothing),
+)
 
 # Resting weights that reproduce original layout:
 #   Row heights 35/35/30, Row 1 columns 65/35, Row 2 columns 50/50.
@@ -35,6 +45,9 @@ const _SIXEL_FOCUS_LO = 0.3
     latency_history::Vector{Vector{Float64}} = [Float64[] for _ in 1:32]  # 32 buckets
     mem_pages::Matrix{Float64} = zeros(64, 64)   # page ages (0=free, >0=allocated)
     avg_load::Vector{Float64} = Float64[]
+    # Persistent flame PixelImage (holds bg state across frames)
+    flame_img::Union{PixelImage, Nothing} = nothing
+    flame_bg_idx::Int = 1           # index into _FLAME_BG_PRESETS
 end
 
 should_quit(m::SixelGalleryModel) = m.quit
@@ -52,6 +65,14 @@ function update!(m::SixelGalleryModel, evt::KeyEvent)
         evt.char == 'p' && (m.paused = !m.paused)
         if evt.char == 'z'
             _sixel_cycle_focus!(m)
+            return
+        end
+        if evt.char == 'b'
+            _sixel_cycle_flame_bg!(m)
+            return
+        end
+        if evt.char == 't'
+            set_light_mode!(!light_mode())
             return
         end
         for c in ('0', '1', '2', '3', '4', '5')
@@ -72,6 +93,18 @@ end
 function _sixel_cycle_focus!(m::SixelGalleryModel)
     m.focus = m.focus >= 5 ? 0 : m.focus + 1
     _sixel_update_targets!(m)
+end
+
+function _sixel_cycle_flame_bg!(m::SixelGalleryModel)
+    m.flame_bg_idx = mod1(m.flame_bg_idx + 1, length(_FLAME_BG_PRESETS))
+    img = m.flame_img
+    img === nothing && return
+    _, color = _FLAME_BG_PRESETS[m.flame_bg_idx]
+    if color === nothing
+        reset_background!(img)
+    else
+        set_background!(img, color)
+    end
 end
 
 function _sixel_update_targets!(m::SixelGalleryModel)
@@ -198,12 +231,10 @@ function _draw_latency_heatmap!(img::PixelImage, m::SixelGalleryModel)
             freq = hist[si]
             # Color: dark → bright cyan/white for frequency
             v = clamp(freq, 0.0, 1.0)
-            r = UInt8(round(0x10 + 0x40 * v))
-            g = UInt8(round(0x20 + 0xd0 * v))
-            b = UInt8(round(0x30 + 0xcf * v))
-            if v > 0.05
-                pixels[py, px] = ColorRGBA(r, g, b)
-            end
+            r = UInt8(round(0x06 + 0x4a * v))
+            g = UInt8(round(0x08 + 0xe8 * v))
+            b = UInt8(round(0x0a + 0xe5 * v))
+            pixels[py, px] = ColorRGBA(r, g, b)
         end
     end
 end
@@ -235,81 +266,130 @@ function _draw_memory_map!(img::PixelImage, m::SixelGalleryModel)
     end
 end
 
+# A span in the flame graph: fractional x range within parent + unique id for color.
+struct _FlameSpan
+    x0::Float64   # 0..1 start within parent
+    x1::Float64   # 0..1 end within parent
+    id::Int       # stable hash for color
+end
+
+# Recursively generate a call-tree: each span subdivides into 2-4 children.
+# `depth` counts down; the returned vector is flat spans at the CURRENT level.
+function _flame_subdivide(parent_x0::Float64, parent_x1::Float64,
+                          depth::Int, seed::Int)
+    pw = parent_x1 - parent_x0
+    pw < 0.005 && return _FlameSpan[]  # too narrow to split
+    depth <= 0 && return _FlameSpan[]
+
+    # Deterministic child count from seed (2–4)
+    n_children = 2 + ((seed * 7 + depth * 13) % 3)
+    # Generate split points using a deterministic hash
+    splits = Float64[0.0]
+    for i in 1:(n_children - 1)
+        h = ((seed * 31 + i * 17 + depth * 53) % 97) / 97.0
+        push!(splits, clamp(h, splits[end] + 0.03, 1.0 - 0.03 * (n_children - i)))
+    end
+    push!(splits, 1.0)
+
+    spans = _FlameSpan[]
+    for i in 1:n_children
+        cx0 = parent_x0 + splits[i] * pw
+        cx1 = parent_x0 + splits[i + 1] * pw
+        (cx1 - cx0) < 0.004 && continue
+        # Leave a tiny gap between siblings (1% of parent width, at least 0.002)
+        gap = min(0.002, pw * 0.01)
+        push!(spans, _FlameSpan(cx0 + gap, cx1 - gap,
+                                seed * 97 + i * 31 + depth * 7))
+    end
+    spans
+end
+
+# Warm color palette (reds/oranges/yellows) as in traditional flame graphs.
+# `self_frac` 0..1 biases toward red (hot) vs yellow (cool).
+function _flame_color(id::Int, self_frac::Float64, t::Float64)
+    # Base hue: 0 (red) → 60 (yellow)
+    hue = 60.0 * (1.0 - clamp(self_frac, 0.0, 1.0))
+    # Per-function offset so siblings differ slightly
+    hue += ((id * 37) % 20) - 10.0
+    hue = clamp(hue, -5.0, 65.0)
+    sat = 0.75 + 0.15 * (((id * 13) % 17) / 17.0)
+    val = 0.55 + 0.25 * (((id * 7) % 13) / 13.0)
+    # Hot-path shimmer
+    is_hot = self_frac > 0.5
+    if is_hot
+        val += 0.12 * (0.5 + 0.5 * sin(t * 4.0 + Float64(id) * 0.3))
+    end
+    val = clamp(val, 0.0, 1.0)
+    # HSV → RGB
+    c = clamp(hue, 0.0, 360.0) / 60.0
+    x_hsv = val * sat * (1.0 - abs(mod(c, 2.0) - 1.0))
+    m_hsv = val * (1.0 - sat)
+    r, g, b = if c < 1.0
+        (val * sat + m_hsv, x_hsv + m_hsv, m_hsv)
+    elseif c < 2.0
+        (x_hsv + m_hsv, val * sat + m_hsv, m_hsv)
+    else
+        (m_hsv + x_hsv * 0.3, val * sat * 0.4 + m_hsv, m_hsv)
+    end
+    ColorRGBA(UInt8(round(clamp(r, 0, 1) * 255)),
+              UInt8(round(clamp(g, 0, 1) * 255)),
+              UInt8(round(clamp(b, 0, 1) * 255)))
+end
+
 function _draw_flame_graph!(img::PixelImage, tick::Int)
     pw, ph = img.pixel_w, img.pixel_h
     (pw < 2 || ph < 2) && return
+    clear!(img)
     pixels = img.pixels
     t = Float64(tick) * 0.01
 
-    # Simulated flame graph: 8 stack depth levels
-    n_levels = min(8, ph ÷ 2)
-    n_levels < 1 && return
-    level_h = ph ÷ n_levels
+    margin = max(2, ph ÷ 30)
+    draw_h = ph - 2 * margin
+    draw_w = pw - 2 * margin
+    (draw_h < 4 || draw_w < 4) && return
 
-    # Predefined "function" widths per level (simulate call stacks)
-    for level in 1:n_levels
-        py_start = (level - 1) * level_h + 1
-        py_end = min(level * level_h, ph)
+    max_depth = min(10, draw_h ÷ 3)
+    max_depth < 1 && return
+    level_h = draw_h ÷ max_depth
+    v_gap = max(1, level_h ÷ 6)   # gap between levels
 
-        # Number of functions at this level increases with depth
-        n_funcs = level + 1
-        # Stable function boundaries from noise
-        boundaries = Float64[0.0]
-        for fi in 1:(n_funcs - 1)
-            b = noise(Float64(fi) * 3.7 + Float64(level) * 7.1) * 0.3 + Float64(fi) / n_funcs
-            push!(boundaries, clamp(b, boundaries[end] + 0.02, 1.0 - 0.02 * (n_funcs - fi)))
-        end
-        push!(boundaries, 1.0)
+    # Build the tree level by level. Level 1 (bottom) = full width.
+    # Each level's spans are children of the previous level's spans.
+    prev_spans = [_FlameSpan(0.0, 1.0, 42)]
 
-        for fi in 1:n_funcs
-            x0 = round(Int, boundaries[fi] * pw) + 1
-            x1 = round(Int, boundaries[fi + 1] * pw)
+    for depth in 1:max_depth
+        # Draw this level (bottom-up: level 1 at the bottom)
+        py_base = ph - margin - depth * level_h + 1
+        py_top  = py_base + level_h - v_gap - 1
+        (py_base < margin || py_top < py_base) && continue
+
+        for span in prev_spans
+            # "Self time" fraction — deeper = more likely to be a leaf (hot)
+            self_frac = Float64(depth) / Float64(max_depth) *
+                        (0.3 + 0.7 * (((span.id * 11) % 19) / 19.0))
+            color = _flame_color(span.id, self_frac, t)
+
+            x0 = margin + round(Int, span.x0 * draw_w) + 1
+            x1 = margin + round(Int, span.x1 * draw_w)
             x0 > x1 && continue
+            x1 = min(x1, pw)
 
-            # Color per "function" (stable, based on function index + level)
-            seed = Float64(fi * 17 + level * 31)
-            hue = mod(seed * 37.0, 360.0)
-            sat = 0.6 + 0.2 * noise(seed * 0.1)
-            val = 0.4 + 0.3 * noise(seed * 0.2)
-
-            # Hot-path shimmer
-            is_hot = noise(seed * 0.05 + t * 0.5) > 0.6
-            if is_hot
-                val += 0.15 * (0.5 + 0.5 * sin(t * 4.0 + seed))
-            end
-            val = clamp(val, 0.0, 1.0)
-
-            c = hue / 60.0
-            x_hsv = val * sat * (1.0 - abs(mod(c, 2.0) - 1.0))
-            m_hsv = val * (1.0 - sat)
-            r1, g1, b1 = if c < 1.0
-                (val * sat + m_hsv, x_hsv + m_hsv, m_hsv)
-            elseif c < 2.0
-                (x_hsv + m_hsv, val * sat + m_hsv, m_hsv)
-            elseif c < 3.0
-                (m_hsv, val * sat + m_hsv, x_hsv + m_hsv)
-            elseif c < 4.0
-                (m_hsv, x_hsv + m_hsv, val * sat + m_hsv)
-            elseif c < 5.0
-                (x_hsv + m_hsv, m_hsv, val * sat + m_hsv)
-            else
-                (val * sat + m_hsv, m_hsv, x_hsv + m_hsv)
-            end
-            color = ColorRGBA(UInt8(round(r1 * 255)), UInt8(round(g1 * 255)), UInt8(round(b1 * 255)))
-
-            @inbounds for py in py_start:py_end
-                for px in x0:min(x1, pw)
+            @inbounds for py in py_base:min(py_top, ph)
+                for px in x0:x1
                     pixels[py, px] = color
                 end
             end
-
-            # 1px border between functions
-            if x1 < pw
-                @inbounds for py in py_start:py_end
-                    pixels[py, min(x1 + 1, pw)] = ColorRGBA(0x10, 0x10, 0x10)
-                end
-            end
         end
+
+        # Generate children for next level
+        next_spans = _FlameSpan[]
+        for span in prev_spans
+            children = _flame_subdivide(span.x0, span.x1, max_depth - depth,
+                                         span.id)
+            append!(next_spans, children)
+        end
+        isempty(next_spans) && break
+        prev_spans = next_spans
     end
 end
 
@@ -400,17 +480,26 @@ function _render_memory_pane!(area::Rect, buf::Buffer, f::Frame, m::SixelGallery
 end
 
 function _render_flame_pane!(area::Rect, buf::Buffer, f::Frame, m::SixelGalleryModel)
+    label, _ = _FLAME_BG_PRESETS[m.flame_bg_idx]
     focused = m.focus == 5
     bs = focused ? tstyle(:accent, bold=true) : tstyle(:border)
     ts = focused ? tstyle(:accent, bold=true) : tstyle(:title)
-    blk = Block(title="Flame Graph",
+    blk = Block(title="Flame Graph ── bg=$(label)  [b]cycle",
                 border_style=bs, title_style=ts)
     inner = render(blk, area, buf)
-    if inner.width >= 4 && inner.height >= 2
-        img = PixelImage(inner.width, inner.height)
-        _draw_flame_graph!(img, m.tick)
-        render(img, inner, f; tick=m.tick)
+    (inner.width >= 4 && inner.height >= 2) || return
+
+    # Persist the PixelImage on the model so bg state (custom color vs.
+    # canvas-tracked) survives across frames. Recreate only on resize.
+    img = m.flame_img
+    if img === nothing ||
+       img.cells_w != inner.width || img.cells_h != inner.height
+        _, color = _FLAME_BG_PRESETS[m.flame_bg_idx]
+        img = PixelImage(inner.width, inner.height; bg=color)
+        m.flame_img = img
     end
+    _draw_flame_graph!(img, m.tick)
+    render(img, inner, f; tick=m.tick)
 end
 
 # ── View ─────────────────────────────────────────────────────────────
@@ -443,8 +532,11 @@ function view(m::SixelGalleryModel, f::Frame)
     set_string!(buf, header.x + 2, header.y,
                 "Sixel Gallery", tstyle(:primary, bold=true))
     focus_label = m.focus == 0 ? "all" : string(m.focus)
+    bg_label, _ = _FLAME_BG_PRESETS[m.flame_bg_idx]
+    theme_label = light_mode() ? "light" : "dark"
     set_string!(buf, header.x + 16, header.y,
-                " $(DOT) Performance Monitor $(DOT) focus=$(focus_label)", tstyle(:text_dim))
+                " $(DOT) Performance Monitor $(DOT) focus=$(focus_label) $(DOT) theme=$(theme_label) $(DOT) flame_bg=$(bg_label)",
+                tstyle(:text_dim))
 
     # ── Spring-driven layout ──
     # Pane mapping: 1=CPU, 2=Summary (row 1); 3=Latency, 4=Memory (row 2); 5=Flame (row 3)
@@ -482,7 +574,7 @@ function view(m::SixelGalleryModel, f::Frame)
 
     # Footer
     render(StatusBar(
-        left=[Span("  [0-5]focus [z/Tab]cycle [p]ause ", tstyle(:text_dim))],
+        left=[Span("  [0-5]focus [z/Tab]cycle [p]ause [b]flame-bg [t]heme ", tstyle(:text_dim))],
         right=[Span("[q/Esc]quit ", tstyle(:text_dim))],
     ), footer, buf)
 end
