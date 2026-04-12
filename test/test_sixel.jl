@@ -232,6 +232,49 @@
         T.set_light_mode!(orig_mode)
     end
 
+    @testset "PixelImage custom background" begin
+        orig_mode = T.light_mode()
+        T.set_light_mode!(false)
+        custom = T.ColorRGBA(0x20, 0x40, 0x60)
+
+        # bg passed to constructor is preserved and disables canvas tracking
+        img = T.PixelImage(5, 3; bg=custom)
+        @test img.bg == custom
+        @test img.bg_tracks_canvas == false
+        @test img.pixels[1, 1] == custom
+
+        # clear! must not clobber with canvas_bg()
+        T.set_pixel!(img, 1, 1, T.ColorRGBA(0xff, 0x00, 0x00))
+        T.clear!(img)
+        @test img.bg == custom
+        @test img.pixels[1, 1] == custom
+
+        # theme change must not clobber either
+        T.set_light_mode!(true)
+        T.clear!(img)
+        @test img.bg == custom
+
+        # set_background! updates bg and rewrites old-bg pixels
+        other = T.ColorRGBA(0x10, 0x10, 0x10)
+        T.set_background!(img, other)
+        @test img.bg == other
+        @test img.bg_tracks_canvas == false
+        @test img.pixels[1, 1] == other
+
+        # reset_background! re-enables canvas tracking
+        T.set_light_mode!(false)
+        T.reset_background!(img)
+        @test img.bg_tracks_canvas == true
+        @test img.bg == T.canvas_bg()
+
+        # Default constructor (no bg) still tracks canvas
+        img2 = T.PixelImage(5, 3)
+        @test img2.bg_tracks_canvas == true
+        @test img2.bg == T.canvas_bg()
+
+        T.set_light_mode!(orig_mode)
+    end
+
     @testset "PixelImage adapts empty background across mode toggle" begin
         orig_mode = T.light_mode()
         try

@@ -15,6 +15,7 @@ mutable struct PixelImage
     cells_h::Int
     block::Union{Block, Nothing}
     bg::ColorRGBA                    # current empty/background pixel color
+    bg_tracks_canvas::Bool           # if true, bg follows canvas_bg() on sync
     style::Style                    # braille fallback style
     color::ColorRGBA                 # current drawing color
     decay::DecayParams              # per-widget decay (default: off)
@@ -69,14 +70,50 @@ function PixelImage(cells_w::Int, cells_h::Int;
                     block::Union{Block, Nothing}=nothing,
                     style::Style=tstyle(:primary),
                     decay::DecayParams=DecayParams(),
-                    bg::ColorRGBA=canvas_bg())
+                    bg::Union{ColorRGBA, Nothing}=nothing)
     pw, ph = _pixelimage_pixel_dims(cells_w, cells_h)
     color = _style_to_rgb(style)
-    PixelImage(fill(bg, ph, pw), pw, ph, cells_w, cells_h,
-               block, bg, style, color, decay)
+    tracks = bg === nothing
+    actual_bg = tracks ? canvas_bg() : bg
+    PixelImage(fill(actual_bg, ph, pw), pw, ph, cells_w, cells_h,
+               block, actual_bg, tracks, style, color, decay)
+end
+
+"""
+    set_background!(img::PixelImage, bg::ColorRGBA)
+
+Set the background color for `img` and rewrite any pixels currently holding
+the old background. Disables canvas-bg tracking so the color is preserved
+across theme changes, resizes, and clears. Pass a color equal to `canvas_bg()`
+via `reset_background!` to re-enable tracking.
+"""
+function set_background!(img::PixelImage, bg::ColorRGBA)
+    old_bg = img.bg
+    if old_bg != bg
+        @inbounds for i in eachindex(img.pixels)
+            img.pixels[i] == old_bg && (img.pixels[i] = bg)
+        end
+        img.bg = bg
+    end
+    img.bg_tracks_canvas = false
+    img
+end
+
+set_background!(img::PixelImage, bg::ColorRGB) = set_background!(img, ColorRGBA(bg))
+
+"""
+    reset_background!(img::PixelImage)
+
+Re-enable canvas-bg tracking so `img.bg` follows `canvas_bg()` on subsequent
+syncs (clears, resizes, theme changes).
+"""
+function reset_background!(img::PixelImage)
+    img.bg_tracks_canvas = true
+    _sync_pixelimage_bg!(img)
 end
 
 function _sync_pixelimage_bg!(img::PixelImage)
+    img.bg_tracks_canvas || return img
     new_bg = canvas_bg()
     old_bg = img.bg
     old_bg == new_bg && return img

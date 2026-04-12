@@ -178,6 +178,7 @@ export # Core types
        set_pixel!, pixel_line!, fill_pixel_rect!,
        # PixelImage widget
        PixelImage, fill_rect!, load_pixels!, render_rgba!,
+       set_background!, reset_background!,
        # Background system
        Background, DotWaveBackground, PhyloTreeBackground,
        CladogramBackground,
