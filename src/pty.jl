@@ -4,9 +4,11 @@
 # Platform: Unix only (macOS, Linux, BSD). PTYs are a Unix kernel concept;
 # Windows would require a ConPTY backend behind the same API surface.
 #
-# Uses openpty() + posix_spawnp() instead of forkpty() to avoid fork()
-# deadlocks in Julia's multithreaded runtime. POSIX_SPAWN_SETSID gives
-# the child a proper session and controlling terminal.
+# Linux: openpty() + posix_spawnp() (avoids fork() deadlocks in Julia's
+# multithreaded runtime); POSIX_SPAWN_SETSID + opening the slave assigns
+# the controlling terminal. macOS: posix_spawn can't assign a ctty (BSD
+# needs an explicit TIOCSCTTY), so we use forkpty()/login_tty() there,
+# execing immediately in the child so the fork is safe.
 #
 # PTY output is read by a background task using FileWatching.poll_fd
 # and delivered via a Channel{Vector{UInt8}}. This decouples PTY I/O
@@ -128,6 +130,52 @@ function _start_pty_reader(pty::PTY)
     end
 end
 
+# macOS: posix_spawn can't make the slave the controlling terminal — BSD doesn't assign a ctty
+# on open the way Linux does (it needs an explicit TIOCSCTTY), so a child that opens /dev/tty
+# fails ("Device not configured") and never receives SIGWINCH. forkpty does login_tty (setsid +
+# TIOCSCTTY + dup the slave to 0/1/2) in the child, giving it a real controlling terminal. argv
+# and envp are built BEFORE the fork; the forked child only execs — no Julia allocation between
+# fork and exec.
+@static if Sys.isapple()
+function _pty_spawn_forkpty(cmd::Vector{String}; rows::Int, cols::Int, env)
+    prog = Sys.which(cmd[1])
+    prog === nothing && error("pty_spawn: command not found in PATH: $(cmd[1])")
+    ws = UInt16[rows, cols, 0, 0]
+    master = Ref{Cint}(-1)
+    c_strs = [Base.cconvert(Cstring, s) for s in cmd]
+    argv = Cstring[Base.unsafe_convert(Cstring, c) for c in c_strs]
+    push!(argv, C_NULL)
+    env_dict = copy(ENV)
+    if env !== nothing
+        for (k, v) in env
+            env_dict[k] = v
+        end
+    end
+    haskey(env_dict, "TERM") || (env_dict["TERM"] = "xterm-256color")
+    env_c = [Base.cconvert(Cstring, "$k=$v") for (k, v) in env_dict]
+    envp = Cstring[Base.unsafe_convert(Cstring, c) for c in env_c]
+    push!(envp, C_NULL)
+    prog_c = Base.cconvert(Cstring, prog)
+    pid = GC.@preserve c_strs argv env_c envp prog_c ws begin
+        p = ccall(:forkpty, Cint, (Ptr{Cint}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{UInt16}),
+                  master, C_NULL, C_NULL, pointer(ws))
+        if p == 0
+            # CHILD — login_tty already done by forkpty; just exec (no allocation here).
+            ccall(:execve, Cint, (Cstring, Ptr{Cstring}, Ptr{Cstring}),
+                  Base.unsafe_convert(Cstring, prog_c), pointer(argv), pointer(envp))
+            ccall(:_exit, Cvoid, (Cint,), Cint(127))
+        end
+        p
+    end
+    pid == -1 && error("forkpty failed: $(Base.Libc.strerror(Base.Libc.errno()))")
+    _set_nonblocking(master[])
+    output = Channel{Vector{UInt8}}(64)
+    pty = PTY(master[], pid, rows, cols, true, output, (@async nothing), nothing)
+    pty.reader_task = _start_pty_reader(pty)
+    return pty
+end
+end  # @static Sys.isapple()
+
 """
     pty_spawn(cmd::Vector{String}; rows=24, cols=80) → PTY
 
@@ -144,6 +192,11 @@ function pty_spawn(cmd::Vector{String}; rows::Int=24, cols::Int=80,
                    env::Union{Dict{String,String}, Nothing}=nothing)
     @static Sys.iswindows() && error("PTY not supported on Windows")
     isempty(cmd) && error("pty_spawn: cmd must not be empty")
+
+    # macOS needs forkpty/login_tty to get a controlling terminal (see _pty_spawn_forkpty).
+    @static if Sys.isapple()
+        return _pty_spawn_forkpty(cmd; rows = rows, cols = cols, env = env)
+    end
 
     master_fd = Ref{Cint}(-1)
     slave_fd  = Ref{Cint}(-1)
