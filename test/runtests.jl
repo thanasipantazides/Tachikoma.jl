@@ -30,6 +30,7 @@ struct _DummyModel <: T.Model end
     include("test_style.jl")
     include("test_ccall_safety.jl")
     include("test_floating_window.jl")
+    include("test_panel_tree.jl")
     include("test_terminal_widget.jl")
     include("test_paged_datatable.jl")
     include("test_ansitext.jl")

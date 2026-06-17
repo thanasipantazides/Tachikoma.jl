@@ -156,6 +156,10 @@ export # Core types
        handle_event!, step!, tick,
        window_opacity, set_window_opacity!, WINDOW_OPACITY,
        recording_enabled,
+       # Tiling panes (PanelTree)
+       PanelTree, PaneLeaf, PaneSplit, PaneNode,
+       split_pane!, close_pane!, panes, pane_count,
+       focused_pane, focused_content, cancel_move!, is_moving,
        # Terminal widget
        TerminalWidget, TermScreen, PTY, REPLWidget,
        pty_spawn, pty_pair, pty_close!, pty_resize!, pty_alive, drain!,
