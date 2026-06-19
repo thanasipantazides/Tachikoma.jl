@@ -5,8 +5,15 @@
 struct ListItem
     content::String
     style::Style
+    prefix::String          # optional leading segment (e.g. a status icon), drawn with
+    prefix_style::Style      # prefix_style and NEVER recolored by the selection highlight
 end
 
+# Keyword API: `ListItem("name", tstyle(:text); prefix="● ", prefix_style=status_style)`
+# keeps the prefix's own color even when the row is selected/highlighted.
+ListItem(content::AbstractString, style::Style; prefix::AbstractString="",
+         prefix_style::Style=style) =
+    ListItem(String(content), style, String(prefix), prefix_style)
 ListItem(s::AbstractString) = ListItem(s, tstyle(:text))
 
 mutable struct SelectableList
@@ -118,16 +125,20 @@ function render(lst::SelectableList, rect::Rect, buf::Buffer)
         idx > n && break
         y = text_area.y + i - 1
         item = lst.items[idx]
+        selected = idx == lst.selected
 
-        if idx == lst.selected
-            # Highlighted row
-            text_area.x <= max_cx && set_char!(buf, text_area.x, y, lst.marker, hl_style)
-            set_string!(buf, text_area.x + 2, y,
-                        item.content, hl_style; max_x=max_cx)
-        else
-            set_string!(buf, text_area.x + 2, y,
-                        item.content, item.style; max_x=max_cx)
+        cx = text_area.x
+        # Selection marker (highlight color) on the active row.
+        if selected
+            cx <= max_cx && set_char!(buf, cx, y, lst.marker, hl_style)
         end
+        cx += 2
+        # Optional styled prefix (e.g. a status icon): always its own style, NEVER
+        # recolored by the selection highlight. set_string! returns the next column.
+        if !isempty(item.prefix)
+            cx = set_string!(buf, cx, y, item.prefix, item.prefix_style; max_x=max_cx)
+        end
+        set_string!(buf, cx, y, item.content, selected ? hl_style : item.style; max_x=max_cx)
     end
 
     # Scrollbar or scroll indicators
