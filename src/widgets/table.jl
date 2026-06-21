@@ -109,7 +109,7 @@ function render_table_row!(buf::Buffer, x0::Int, y::Int,
         j > length(widths) && break
         w = widths[j]
         # Truncate cell text to fit
-        txt = length(cell) > w - 1 ? cell[1:w-2] * "…" : cell
+        txt = length(cell) > w - 1 ? first(cell, max(0, w-2)) * "…" : cell
         set_string!(buf, cx, y, txt, style)
         cx += w
         # Column separator

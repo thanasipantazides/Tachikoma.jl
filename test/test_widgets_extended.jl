@@ -985,6 +985,43 @@
         @test true
     end
 
+    @testset "DataTable truncates multibyte cells (Tachikoma#36)" begin
+        # Regression: truncating a cell that contains multibyte UTF-8 must not
+        # byte-index into the middle of a character (StringIndexError). Em-dash
+        # is 3 bytes, so a narrow column forces a mid-character slice boundary.
+        cols = [
+            T.DataColumn("A", ["—————————————————————————————", "ok"]),
+            T.DataColumn("B", ["x — y — z — w — v — u — t — s", "ok"]),
+        ]
+        dt = T.DataTable(cols; selected=1)
+        buf = T.Buffer(T.Rect(1, 1, 16, 6))
+        # On the old code this threw StringIndexError; now it renders cleanly.
+        @test (T.render(dt, T.Rect(1, 1, 16, 6), buf); true)
+
+        # Sweep explicit narrow widths so the truncation boundary lands at
+        # every byte offset within the multibyte run.
+        emdash = "—————————————————————————————"
+        for w in 2:8
+            dt2 = T.DataTable([T.DataColumn("A", [emdash]; width=w)])
+            buf2 = T.Buffer(T.Rect(1, 1, 12, 6))
+            @test (T.render(dt2, T.Rect(1, 1, 12, 6), buf2); true)
+        end
+
+        # Multibyte header truncation (name + sort indicator) must be char-safe.
+        # Give the multibyte header an explicit narrow width and a filler last
+        # column to absorb expansion; the wide buffer avoids proportional shrink,
+        # so sweeping the explicit width moves the cut through mid-char offsets.
+        for cw in 2:12
+            dt3 = T.DataTable([
+                T.DataColumn("café—résumé—naïve—über——————", ["v"]; width=cw),
+                T.DataColumn("fill", ["x"]),
+            ])
+            T.sort_by!(dt3, 1)  # appends a multibyte ▲ to the header
+            buf3 = T.Buffer(T.Rect(1, 1, 60, 6))
+            @test (T.render(dt3, T.Rect(1, 1, 60, 6), buf3); true)
+        end
+    end
+
     # ═════════════════════════════════════════════════════════════════
     # Batch 5b: DataTable h-scroll, resize, detail view
     # ═════════════════════════════════════════════════════════════════

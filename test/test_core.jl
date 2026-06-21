@@ -388,6 +388,21 @@
         @test true  # should not crash
     end
 
+    @testset "BarChart multibyte label truncation (Tachikoma#36)" begin
+        # Long multibyte labels must truncate by character, not byte. Sweep
+        # buffer widths so the truncation boundary lands at every byte offset
+        # within the multibyte run (em-dash is 3 bytes → boundaries cycle).
+        bars = [T.BarEntry("—————————————————————————————", 75.0),
+                T.BarEntry("café — résumé — naïve — über", 45.0)]
+        # Force truncation with an explicit (small) label column, swept so the
+        # cut boundary lands at every byte offset within the multibyte run.
+        for lw in 3:12
+            bc = T.BarChart(bars; max_val=100.0, label_width=lw, show_values=false)
+            buf = T.Buffer(T.Rect(1, 1, 40, 5))
+            @test (T.render(bc, T.Rect(1, 1, 40, 5), buf); true)
+        end
+    end
+
     @testset "Calendar" begin
         buf = T.Buffer(T.Rect(1, 1, 25, 10))
         cal = T.Calendar(2024, 1; today=15)

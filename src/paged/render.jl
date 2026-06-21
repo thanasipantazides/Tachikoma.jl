@@ -24,7 +24,7 @@ function _pdt_render_header!(pdt::PagedDataTable, buf::Buffer,
         filter_ind = haskey(pdt.filters, i) && !isempty(pdt.filters[i].value) ? "⊘" : ""
 
         combined = string(hdr, indicator, filter_ind)
-        text_str = length(combined) <= w ? combined : combined[1:min(end, w)]
+        text_str = length(combined) <= w ? combined : first(combined, max(0, w))
 
         hdr_style = if pdt.col_hover_border > 0 && i == pdt.col_hover_border
             Style(fg=pdt.header_style.fg, bold=true, underline=true)
@@ -121,7 +121,7 @@ function _pdt_render_data!(pdt::PagedDataTable, buf::Buffer,
             cell_text = _pdt_format_cell(col, row_data, i)
             avail = min(w, max_x - rx + 1)
             if length(cell_text) > avail
-                cell_text = avail > 1 ? cell_text[1:max(1, avail-1)] * "…" : string(cell_text[1])
+                cell_text = avail > 1 ? first(cell_text, max(1, avail-1)) * "…" : string(first(cell_text, 1))
             end
 
             padding = max(0, avail - length(cell_text))
@@ -276,7 +276,7 @@ function render(pdt::PagedDataTable, rect::Rect, buf::Buffer)
     if !isempty(pdt.error_msg)
         err_text = "Error: " * pdt.error_msg
         if length(err_text) > content_area.width - 2
-            err_text = err_text[1:content_area.width - 3] * "…"
+            err_text = first(err_text, max(0, content_area.width - 3)) * "…"
         end
         err_y = content_area.y + max(0, (content_area.height - 2) ÷ 2)
         # Background bars for visibility

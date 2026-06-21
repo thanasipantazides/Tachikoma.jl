@@ -549,6 +549,49 @@
         @test pdt.col_offset >= 0  # may or may not scroll depending on width
     end
 
+    # ── Multibyte truncation (Tachikoma#36) ────────────────────────
+
+    @testset "PagedDataTable: truncates multibyte cells" begin
+        # Regression: narrow columns must truncate multibyte UTF-8 by character,
+        # not byte, or rendering throws StringIndexError. Em-dash is 3 bytes.
+        emdash = "—————————————————————————————"
+        cols = [T.PagedColumn("A"; width=4), T.PagedColumn("B"; width=4)]
+        data = Vector{Any}[Any[emdash, "x — y — z — w"], Any["a — b — c — d", emdash]]
+        p = T.InMemoryPagedProvider(cols, data)
+        pdt = T.PagedDataTable(p; page_size=10)
+
+        for w in (10, 14, 20, 30)
+            buf = T.Buffer(T.Rect(1, 1, w, 10))
+            # Old code threw StringIndexError here; now it renders cleanly.
+            @test (T.render(pdt, T.Rect(1, 1, w, 10), buf); true)
+        end
+    end
+
+    @testset "PagedDataTable: truncates multibyte headers" begin
+        # Header truncation (name + sort/filter indicators) must be char-safe.
+        cols = [T.PagedColumn("—————————————————————————————"; width=4),
+                T.PagedColumn("café — résumé — naïve"; width=4)]
+        data = Vector{Any}[Any["x", "y"], Any["a", "b"]]
+        pdt = T.PagedDataTable(T.InMemoryPagedProvider(cols, data); page_size=10)
+        pdt.sort_col = 1
+        pdt.sort_dir = T.sort_asc  # appends a multibyte ▲ indicator
+        pdt.filters[1] = T.ColumnFilter(T.filter_contains, "x")  # appends ⊘
+        for w in (8, 12, 16, 24)
+            buf = T.Buffer(T.Rect(1, 1, w, 10))
+            @test (T.render(pdt, T.Rect(1, 1, w, 10), buf); true)
+        end
+    end
+
+    @testset "PagedDataTable: truncates multibyte error overlay" begin
+        pdt = T.PagedDataTable(make_test_provider(10); page_size=10)
+        pdt.error_msg = "café — résumé — naïve — über — —————————————"
+        # Sweep widths so the truncation boundary sweeps through mid-char offsets.
+        for w in 8:40
+            buf = T.Buffer(T.Rect(1, 1, w, 12))
+            @test (T.render(pdt, T.Rect(1, 1, w, 12), buf); true)
+        end
+    end
+
     # ── Empty provider ─────────────────────────────────────────────
 
     @testset "PagedDataTable: empty provider" begin

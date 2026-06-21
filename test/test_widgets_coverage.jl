@@ -245,6 +245,19 @@
         @test tbl.widths == [10, 15]
     end
 
+    @testset "Table: multibyte cell truncation (Tachikoma#36)" begin
+        # Narrow columns must truncate multibyte cells by character, not byte.
+        rows = Vector{String}[
+            ["—————————————————————————————", "café — résumé"],
+            ["über — naïve", "—————————————————————————————"],
+        ]
+        for ws in ([4, 4], [6, 6], [8, 8])
+            tbl = T.Table(["—h—", "x — y"], rows; widths=ws)
+            buf = T.Buffer(T.Rect(1, 1, 14, 6))
+            @test (T.render(tbl, T.Rect(1, 1, 14, 6), buf); true)
+        end
+    end
+
     @testset "Table: with block" begin
         tbl = T.Table(["Col"], [["val"]]; block=T.Block(title="Data"))
         tb = T.TestBackend(30, 6)

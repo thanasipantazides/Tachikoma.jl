@@ -65,7 +65,7 @@ function render(bc::BarChart, rect::Rect, buf::Buffer)
 
         # Label (right-aligned)
         label = length(entry.label) > lw - 1 ?
-            entry.label[1:lw-2] * "…" : entry.label
+            first(entry.label, max(0, lw-2)) * "…" : entry.label
         lx = content.x + lw - length(label) - 1
         set_string!(buf, lx, y, label, bc.label_style)
 

@@ -666,7 +666,7 @@ function render_export_overlay!(overlay::AppOverlay, f::Frame)
         font_name = fonts[fi].name
         max_name_w = modal_w - 15  # room for "Font:  ◀  ▶" + padding
         if length(font_name) > max_name_w
-            font_name = font_name[1:max_name_w-1] * "…"
+            font_name = first(font_name, max(0, max_name_w-1)) * "…"
         end
         label = string("Font:  ◀ ", font_name, " ▶")
 

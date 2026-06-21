@@ -432,7 +432,7 @@ function render(dt::DataTable, rect::Rect, buf::Buffer)
             ""
         end
         text = length(hdr) + length(indicator) <= w ?
-            string(hdr, indicator) : hdr[1:min(end, w)]
+            string(hdr, indicator) : first(hdr, max(0, w))
 
         # Highlight hovered border column header
         hdr_style = if dt.col_hover_border > 0 && i == dt.col_hover_border
@@ -531,7 +531,7 @@ function render(dt::DataTable, rect::Rect, buf::Buffer)
             cell_style = raw_val isa Span && !is_selected ? raw_val.style : row_style
             avail = min(w, max_x - rx + 1)
             if length(cell_text) > avail
-                cell_text = avail > 1 ? cell_text[1:max(1, avail-1)] * "…" : string(cell_text[1])
+                cell_text = avail > 1 ? first(cell_text, max(1, avail-1)) * "…" : string(first(cell_text, 1))
             end
 
             # Alignment
