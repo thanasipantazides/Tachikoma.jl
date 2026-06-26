@@ -316,3 +316,23 @@
             @test T.enable_tables() === nothing   # idempotent no-op
         end
     end
+
+    # ═════════════════════════════════════════════════════════════════
+    # GIF/APNG export fallback fonts (pure FS discovery, no extension)
+    # ═════════════════════════════════════════════════════════════════
+
+    @testset "default_gif_fallback_fonts" begin
+        fonts = T.default_gif_fallback_fonts()
+        @test fonts isa Vector{String}
+        # Contract: every returned path is an existing file on disk.
+        @test all(isfile, fonts)
+        # Deterministic and de-duplicated across calls.
+        @test fonts == T.default_gif_fallback_fonts()
+        @test allunique(fonts)
+        # When a well-known system fallback is present, discovery picks it up
+        # (guarded by isfile so it can't fail on a stripped-down runner).
+        if Sys.isapple()
+            emoji = "/System/Library/Fonts/Apple Color Emoji.ttc"
+            isfile(emoji) && @test emoji in fonts
+        end
+    end
