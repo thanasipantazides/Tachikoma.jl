@@ -18,11 +18,22 @@ struct GlyphCache
     size::Int
     glyphs::NTuple{4, Dict{Char, Matrix{UInt8}}}
     metrics::NTuple{4, Dict{Char, Tuple{Int,Int}}}
+    fallbacks::Vector{GlyphCache}             # consulted (in order) for glyphs the primary lacks
 end
 
 # ── Glyph rendering ───────────────────────────────────────────────────
 
-function GlyphCache(font_path::String, pixel_size::Int)
+"""
+    GlyphCache(font_path, pixel_size; fallback_paths=String[])
+
+Build a glyph cache for `font_path`. When a character is absent from the
+primary font (`glyph_index == 0`), the `fallback_paths` fonts are consulted
+in order — mirroring the per-glyph font substitution a terminal does via the
+OS. Typical fallbacks supply CJK, emoji, and symbol coverage that a coding
+font like Menlo/Meslo doesn't carry.
+"""
+function GlyphCache(font_path::String, pixel_size::Int;
+                    fallback_paths::AbstractVector{<:AbstractString}=String[])
     face = FTFont(font_path)
     _load(variant) = let p = Tachikoma.find_font_variant(font_path, variant)
         !isempty(p) ? FTFont(p) : nothing
@@ -30,7 +41,16 @@ function GlyphCache(font_path::String, pixel_size::Int)
     faces = (face, _load("Bold"), _load("Italic"), _load("BoldItalic"))
     glyphs = ntuple(_ -> Dict{Char, Matrix{UInt8}}(), 4)
     mets = ntuple(_ -> Dict{Char, Tuple{Int,Int}}(), 4)
-    GlyphCache(faces, pixel_size, glyphs, mets)
+    fbs = GlyphCache[]
+    for p in fallback_paths
+        isfile(p) || continue
+        try
+            push!(fbs, GlyphCache(String(p), pixel_size))  # fallbacks are flat (no nesting)
+        catch err
+            @warn "GIF export: could not load fallback font" path=p exception=err
+        end
+    end
+    GlyphCache(faces, pixel_size, glyphs, mets, fbs)
 end
 
 @inline function _face_index(bold::Bool, italic::Bool)
@@ -40,24 +60,44 @@ end
                      _FACE_REGULAR
 end
 
-function get_glyph!(gc::GlyphCache, ch::Char; bold::Bool=false, italic::Bool=false)
-    idx = _face_index(bold, italic)
-    # Fall back to regular if the requested variant isn't available
-    face = gc.faces[idx]
-    if face === nothing
-        idx = _FACE_REGULAR
-        face = gc.faces[idx]
-    end
+@inline _has_glyph(face::FTFont, ch::Char) =
+    (try FreeTypeAbstraction.glyph_index(face, ch) != 0 catch; false end)
 
-    gd = gc.glyphs[idx]
-    md = gc.metrics[idx]
+# Pick the (cache, variant-index, face) that should render `ch`: the primary if
+# it has the glyph, else the first fallback that does, else the primary (tofu).
+function _resolve_face(gc::GlyphCache, ch::Char, idx::Int)
+    face = gc.faces[idx]
+    face === nothing && (idx = _FACE_REGULAR; face = gc.faces[idx])
+    (face !== nothing && _has_glyph(face, ch)) && return (gc, idx, face)
+    for fb in gc.fallbacks
+        fidx = fb.faces[idx] === nothing ? _FACE_REGULAR : idx
+        fface = fb.faces[fidx]
+        (fface !== nothing && _has_glyph(fface, ch)) && return (fb, fidx, fface)
+    end
+    return (gc, idx, face)
+end
+
+function get_glyph!(gc::GlyphCache, ch::Char; bold::Bool=false, italic::Bool=false)
+    idx0 = _face_index(bold, italic)
+    src, idx, face = _resolve_face(gc, ch, idx0)
+
+    # Cache keyed in the font that actually owns the glyph, under its variant.
+    gd = src.glyphs[idx]
+    md = src.metrics[idx]
     haskey(gd, ch) && return gd[ch], md[ch]
 
-    raw_bitmap, extent = renderface(face, ch, gc.size)
-    bitmap = collect(transpose(raw_bitmap))
-    hb = extent.horizontal_bearing
-    bx = round(Int, hb[1])
-    by = round(Int, hb[2])
+    # Some fallback faces (e.g. bitmap/sbix colour-emoji fonts) can't be
+    # rendered to a grayscale outline — degrade to blank rather than abort.
+    local bitmap, bx, by
+    try
+        raw_bitmap, extent = renderface(face, ch, gc.size)
+        bitmap = collect(transpose(raw_bitmap))
+        hb = extent.horizontal_bearing
+        bx = round(Int, hb[1])
+        by = round(Int, hb[2])
+    catch
+        bitmap = zeros(UInt8, 1, 1); bx = 0; by = 0
+    end
     gd[ch] = bitmap
     md[ch] = (bx, by)
     bitmap, (bx, by)
@@ -198,31 +238,34 @@ function _draw_braille!(img::Matrix{RGB{N0f8}}, ch::Char,
     mask == 0 && return  # blank braille
     img_h, img_w = size(img)
 
-    alpha_scale = dim ? 0.5f0 : 1.0f0
+    base_alpha = dim ? 0.5f0 : 1.0f0
 
-    # Kitty-style rendering: each dot fills a rectangular block in a 2×4 grid,
-    # so active dots tile seamlessly with no gaps between them.
-    col_w = cell_w ÷ 2
-    row_h = cell_h ÷ 4
+    # Render each dot as an inset round dot (with gaps), the way braille fonts
+    # and terminals draw it — so spinners read as dots and canvases stay legible
+    # rather than merging into solid blocks. Dots are centred in a 2×4 grid of
+    # slots and anti-aliased against the slot's half-pixel coverage.
+    col_w = cell_w / 2
+    row_h = cell_h / 4
+    rx = col_w * 0.40                      # dot radius (≈20% gap between dots)
+    ry = row_h * 0.40
 
     for row in 0:3, col in 0:1
         (mask & _BRAILLE_BITS[row + 1][col + 1]) == 0 && continue
-        # Block bounds for this dot
-        x0 = px0 + col * col_w
-        y0 = py0 + row * row_h
-        x1 = col == 1 ? px0 + cell_w - 1 : x0 + col_w - 1  # right col absorbs remainder
-        y1 = row == 3 ? py0 + cell_h - 1 : y0 + row_h - 1  # bottom row absorbs remainder
+        cx = px0 + (col + 0.5) * col_w     # dot centre
+        cy = py0 + (row + 0.5) * row_h
+        x0 = max(1, floor(Int, cx - rx));  x1 = min(img_w, ceil(Int, cx + rx))
+        y0 = max(1, floor(Int, cy - ry));  y1 = min(img_h, ceil(Int, cy + ry))
         for ty in y0:y1, tx in x0:x1
-            (1 <= tx <= img_w && 1 <= ty <= img_h) || continue
-            if alpha_scale >= 0.99f0
-                @inbounds img[ty, tx] = fg
-            else
-                @inbounds old = img[ty, tx]
-                r = Float32(old.r) * (1 - alpha_scale) + Float32(fg.r) * alpha_scale
-                g = Float32(old.g) * (1 - alpha_scale) + Float32(fg.g) * alpha_scale
-                b = Float32(old.b) * (1 - alpha_scale) + Float32(fg.b) * alpha_scale
-                @inbounds img[ty, tx] = RGB{N0f8}(clamp(r, 0, 1), clamp(g, 0, 1), clamp(b, 0, 1))
-            end
+            # signed distance in normalised dot space; soft 1px edge for AA
+            d = sqrt(((tx - cx) / rx)^2 + ((ty - cy) / ry)^2)
+            cov = clamp((1.0 - d) * (rx + 1.0), 0.0, 1.0)
+            cov <= 0.0 && continue
+            a = Float32(cov) * base_alpha
+            @inbounds old = img[ty, tx]
+            r = Float32(old.r) * (1 - a) + Float32(fg.r) * a
+            g = Float32(old.g) * (1 - a) + Float32(fg.g) * a
+            b = Float32(old.b) * (1 - a) + Float32(fg.b) * a
+            @inbounds img[ty, tx] = RGB{N0f8}(clamp(r, 0, 1), clamp(g, 0, 1), clamp(b, 0, 1))
         end
     end
 end
@@ -587,10 +630,11 @@ function Tachikoma.record_gif(func::Function, filename::String,
                               fps::Int=10,
                               font_path::String="",
                               font_size::Int=16,
+                              fallback_fonts::AbstractVector{<:AbstractString}=Tachikoma.default_gif_fallback_fonts(),
                               cell_w::Int=10, cell_h::Int=20)
     gc = nothing
     if !isempty(font_path) && isfile(font_path)
-        gc = GlyphCache(font_path, font_size)
+        gc = GlyphCache(font_path, font_size; fallback_paths=fallback_fonts)
     end
 
     tb = Tachikoma.TestBackend(width, height)
@@ -689,6 +733,7 @@ function Tachikoma.export_gif_from_snapshots(filename::String, width::Int, heigh
                                              pixel_snapshots::Vector{Vector{Tachikoma.PixelSnapshot}}=Vector{Tachikoma.PixelSnapshot}[],
                                              font_path::String="",
                                              font_size::Int=16,
+                              fallback_fonts::AbstractVector{<:AbstractString}=Tachikoma.default_gif_fallback_fonts(),
                                              cell_w::Int=10, cell_h::Int=20,
                                              bg::RGB{N0f8}=RGB{N0f8}(0.067, 0.075, 0.118),
                                              default_fg::Union{Tachikoma.ColorRGB, Nothing}=nothing,
@@ -700,7 +745,7 @@ function Tachikoma.export_gif_from_snapshots(filename::String, width::Int, heigh
     cell_h = round(Int, cell_h * scale)
     gc = nothing
     if !isempty(font_path) && isfile(font_path)
-        gc = GlyphCache(font_path, font_size)
+        gc = GlyphCache(font_path, font_size; fallback_paths=fallback_fonts)
     end
     fg = default_fg !== nothing ? tachikoma_to_rgb(default_fg) : RGB{N0f8}(0.878, 0.878, 0.878)
 
@@ -885,13 +930,14 @@ function Tachikoma.export_apng_from_snapshots(filename::String, width::Int, heig
                                               pixel_snapshots::Vector{Vector{Tachikoma.PixelSnapshot}}=Vector{Tachikoma.PixelSnapshot}[],
                                               font_path::String="",
                                               font_size::Int=16,
+                              fallback_fonts::AbstractVector{<:AbstractString}=Tachikoma.default_gif_fallback_fonts(),
                                               cell_w::Int=10, cell_h::Int=20,
                                               bg::RGB{N0f8}=RGB{N0f8}(0.067, 0.075, 0.118),
                                               default_fg::Union{Tachikoma.ColorRGB, Nothing}=nothing)
     isempty(cell_snapshots) && return filename
     gc = nothing
     if !isempty(font_path) && isfile(font_path)
-        gc = GlyphCache(font_path, font_size)
+        gc = GlyphCache(font_path, font_size; fallback_paths=fallback_fonts)
     end
     fg = default_fg !== nothing ? tachikoma_to_rgb(default_fg) : RGB{N0f8}(0.878, 0.878, 0.878)
 

@@ -5,6 +5,46 @@
 function export_gif_from_snapshots end
 function export_apng_from_snapshots end
 
+"""
+    default_gif_fallback_fonts() → Vector{String}
+
+Platform-appropriate fallback fonts (CJK / emoji / symbols) used by GIF and
+APNG export when the primary font lacks a glyph, so headless renders match
+what a terminal shows via OS font substitution. Only existing files are
+returned; pass `fallback_fonts=` to the exporters to override the list.
+
+This is pure filesystem discovery (no font library needed), so it is honest
+about coverage even before the GIF extension is loaded. We deliberately key
+off ASCII font filenames: on macOS the Japanese-named system fonts are stored
+NFD-normalized, so a literal `"ヒラギノ…"` path won't reliably match on disk.
+"""
+function default_gif_fallback_fonts()
+    paths = String[]
+    if Sys.isapple()
+        sys = "/System/Library/Fonts"
+        cands = [joinpath(sys, "Apple Symbols.ttf"),     # braille, math, misc symbols
+                 joinpath(sys, "AquaKana.ttc"),          # half- & full-width kana + kanji
+                 joinpath(sys, "Hiragino Sans GB.ttc"),  # broad CJK ideographs
+                 joinpath(sys, "Apple Color Emoji.ttc")] # emoji (best-effort; see notes)
+        for p in cands; (!isempty(p) && isfile(p)) && push!(paths, p); end
+    elseif Sys.islinux()
+        cands = ["/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+                 "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+                 "/usr/share/fonts/noto/NotoSansCJK-Regular.ttc",
+                 "/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf",
+                 "/usr/share/fonts/noto/NotoColorEmoji.ttf"]
+        for p in cands; isfile(p) && push!(paths, p); end
+    elseif Sys.iswindows()
+        win = joinpath(get(ENV, "WINDIR", "C:\\Windows"), "Fonts")
+        for p in [joinpath(win, "msgothic.ttc"),    # CJK
+                  joinpath(win, "seguiemj.ttf"),     # emoji
+                  joinpath(win, "seguisym.ttf")]     # symbols
+            isfile(p) && push!(paths, p)
+        end
+    end
+    paths
+end
+
 # Ref hooks — set by TachikomaGifExt.__init__()
 const _gif_export_fn  = Ref{Union{Function, Nothing}}(nothing)
 const _apng_export_fn = Ref{Union{Function, Nothing}}(nothing)
