@@ -79,6 +79,33 @@ APP_EVENTS["constraint_explorer_app"] = fps -> Tuple{Int,KeyEvent}[
     (fps * 7 + 5, KeyEvent('4')),
 ]
 
+# ─── PanelTree Tiling Demo (panel-tree.md) ───────────────────────────
+# Splits the editor pane right ('s') then stacks a pane below ('v'), cycles
+# focus ('f'), then drags the editor pane's title bar across and docks it on
+# pane 2's right edge (mouse press → drag → release). The drop preview animates
+# along the drag, and the layout re-tiles on release.
+APP_EVENTS["panel_tree_demo"] = function (fps)
+    s(t) = round(Int, fps * t)
+    events = Tuple{Int,Event}[
+        (s(1.0), KeyEvent('s')),   # editor | pane 2
+        (s(2.3), KeyEvent('v')),   # pane 2 → pane 2 / pane 3 (stacked)
+        (s(3.6), KeyEvent('f')),   # cycle focus to show the focus ring move
+        (s(4.4), KeyEvent('f')),
+        # Grab the editor pane by its title bar (top row) and drag it right.
+        (s(5.5), MouseEvent(8,  1, mouse_left, mouse_press,   false, false, false)),
+        (s(6.1), MouseEvent(20, 2, mouse_left, mouse_drag,    false, false, false)),
+        (s(6.7), MouseEvent(32, 3, mouse_left, mouse_drag,    false, false, false)),  # enters right column → preview
+        (s(7.3), MouseEvent(44, 4, mouse_left, mouse_drag,    false, false, false)),
+        (s(7.9), MouseEvent(56, 4, mouse_left, mouse_drag,    false, false, false)),
+        (s(8.5), MouseEvent(60, 4, mouse_left, mouse_drag,    false, false, false)),  # over pane 2's right edge
+        (s(9.3), MouseEvent(60, 4, mouse_left, mouse_drag,    false, false, false)),  # hold so the preview is visible
+        (s(9.9), MouseEvent(60, 4, mouse_left, mouse_release, false, false, false)),  # dock editor right of pane 2
+        (s(11.2), KeyEvent('f')),  # cycle focus in the new layout
+        (s(12.2), KeyEvent('f')),
+    ]
+    events
+end
+
 # ─── Todo List App (tutorials/todo-list.md) ──────────────────────────
 APP_EVENTS["todo_app"] = EventScript(
     seq(key(:down), key(:down), key(:enter), key(:down), key(:down), key(:enter), key(:up)),

@@ -74,6 +74,7 @@ export default defineConfig({
           { text: 'Widgets', link: '/widgets' },
           { text: 'PagedDataTable', link: '/paged-datatable' },
           { text: 'Window Manager', link: '/window-manager' },
+          { text: 'Tiling Panes', link: '/panel-tree' },
           { text: 'Terminal & REPL', link: '/terminal-repl' },
           { text: 'Graphics & Pixel Rendering', link: '/canvas' },
           { text: 'Animation', link: '/animation' },
