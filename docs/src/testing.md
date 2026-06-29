@@ -168,10 +168,11 @@ end
 T.should_quit(m::Counter) = m.quit
 
 function T.update!(m::Counter, evt::T.KeyEvent)
-    if evt.key == :char && evt.char == '+'
-        m.count += 1
+    @match (evt.key, evt.char) begin
+        (:char, '+') => (m.count += 1)
+        (:escape, _) => (m.quit = true)
+        _            => nothing
     end
-    evt.key == :escape && (m.quit = true)
 end
 
 @testset "Counter model" begin

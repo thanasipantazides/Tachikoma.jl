@@ -247,8 +247,14 @@ function Tachikoma.set_wake!(m::REPLApp, notify::Function)
 end
 
 function Tachikoma.update!(m::REPLApp, evt::Tachikoma.Event)
-    evt isa Tachikoma.KeyEvent && evt.key == :escape && (m.quit = true; return)
-    Tachikoma.handle_event!(m.wm, evt)
+    if evt isa Tachikoma.KeyEvent
+        @match (evt.key, evt.char) begin
+            (:escape, _) => (m.quit = true; return)
+            _            => Tachikoma.handle_event!(m.wm, evt)
+        end
+    else
+        Tachikoma.handle_event!(m.wm, evt)
+    end
 end
 
 function Tachikoma.view(m::REPLApp, f::Tachikoma.Frame)
@@ -362,15 +368,14 @@ end
 
 function Tachikoma.update!(m::MultiTermApp, evt::Tachikoma.Event)
     if evt isa Tachikoma.KeyEvent
-        evt.key == :escape && (m.quit = true; return)
-
-        if evt.key == :ctrl
-            # Ctrl+N: new terminal, Ctrl+E: new REPL, Ctrl+T: tile/cascade
-            evt.char == 'n' && m.wm.last_area.width > 0 &&
-                return _spawn_terminal!(m, m.wm.last_area)
-            evt.char == 'e' && m.wm.last_area.width > 0 &&
-                return _spawn_repl!(m, m.wm.last_area)
-            if evt.char == 't'
+        # Ctrl+N: new terminal, Ctrl+E: new REPL, Ctrl+T: tile/cascade
+        @match (evt.key, evt.char) begin
+            (:escape, _) => (m.quit = true; return)
+            (:ctrl, 'n') => (m.wm.last_area.width > 0 &&
+                return _spawn_terminal!(m, m.wm.last_area))
+            (:ctrl, 'e') => (m.wm.last_area.width > 0 &&
+                return _spawn_repl!(m, m.wm.last_area))
+            (:ctrl, 't') => begin
                 if m.layout_mode == :tile
                     Tachikoma.cascade!(m.wm); m.layout_mode = :cascade
                 else
@@ -378,6 +383,7 @@ function Tachikoma.update!(m::MultiTermApp, evt::Tachikoma.Event)
                 end
                 return
             end
+            _ => nothing
         end
     end
     Tachikoma.handle_event!(m.wm, evt)

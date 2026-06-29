@@ -106,6 +106,7 @@ Per-window `opacity` overrides the global default when specified explicitly.
 <!-- tachi:app window_manager_demo w=68 h=22 frames=180 fps=15 -->
 ```julia
 import Tachikoma
+using Match
 
 @kwdef mutable struct _WMAnim <: Tachikoma.Model
     wm::Tachikoma.WindowManager = Tachikoma.WindowManager()
@@ -115,11 +116,15 @@ end
 
 function Tachikoma.update!(m::_WMAnim, evt::Tachikoma.Event)
     if evt isa Tachikoma.KeyEvent && evt.key == :char && m.area !== nothing
-        evt.char == 't' && return Tachikoma.tile!(m.wm, m.area; animate=true, duration=15)
-        evt.char == 'c' && return Tachikoma.cascade!(m.wm, m.area; animate=true, duration=15)
-        evt.char == 'f' && return Tachikoma.focus_next!(m.wm)
+        @match (evt.key, evt.char) begin
+            (:char, 't') => Tachikoma.tile!(m.wm, m.area; animate=true, duration=15)
+            (:char, 'c') => Tachikoma.cascade!(m.wm, m.area; animate=true, duration=15)
+            (:char, 'f') => Tachikoma.focus_next!(m.wm)
+            _            => Tachikoma.handle_event!(m.wm, evt)
+        end
+    else
+        Tachikoma.handle_event!(m.wm, evt)
     end
-    Tachikoma.handle_event!(m.wm, evt)
 end
 
 function _ensure_demo_windows!(wm::Tachikoma.WindowManager)

@@ -16,6 +16,7 @@ A four-panel showcase:
 
 ```julia
 using Tachikoma
+using Match
 @tachikoma_app
 
 @kwdef mutable struct AnimShowcase <: Model
@@ -50,26 +51,24 @@ end
 
 ```julia
 function update!(m::AnimShowcase, evt::KeyEvent)
-    if evt.key == :char
-        evt.char == 'q' && (m.quit = true)
-        # Space: cycle spring target
-        if evt.char == ' '
+    @match (evt.key, evt.char) begin
+        (:char, 'q') || (:escape, _) => (m.quit = true)
+        # Space or ↑: cycle spring target forward
+        (:char, ' ') || (:up, _) => begin
             m.spring_idx = mod1(m.spring_idx + 1, length(m.spring_targets))
             retarget!(m.spring, m.spring_targets[m.spring_idx])
         end
+        # ↓: cycle spring target backward
+        (:down, _) => begin
+            m.spring_idx = mod1(m.spring_idx - 1, length(m.spring_targets))
+            retarget!(m.spring, m.spring_targets[m.spring_idx])
+        end
         # R: restart cascade
-        if evt.char == 'r'
+        (:char, 'r') => begin
             for tw in m.cascade; reset!(tw); end
             m.timeline !== nothing && (m.timeline.frame = 0)
         end
-    elseif evt.key == :up
-        m.spring_idx = mod1(m.spring_idx + 1, length(m.spring_targets))
-        retarget!(m.spring, m.spring_targets[m.spring_idx])
-    elseif evt.key == :down
-        m.spring_idx = mod1(m.spring_idx - 1, length(m.spring_targets))
-        retarget!(m.spring, m.spring_targets[m.spring_idx])
-    elseif evt.key == :escape
-        m.quit = true
+        _ => nothing
     end
 end
 ```

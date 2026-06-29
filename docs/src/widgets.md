@@ -255,6 +255,7 @@ Supports Julia syntax highlighting with token types: `token_keyword`, `token_str
 Boolean toggle:
 
 <!-- tachi:app checkbox_demo w=55 h=6 frames=120 fps=15
+using Match
 @kwdef mutable struct _M <: Model
     cb1::Checkbox = __FENCE__
     cb2::Checkbox = Checkbox("Dark mode"; checked=true, focused=false)
@@ -264,16 +265,10 @@ end
 should_quit(m::_M) = m.quit
 function update!(m::_M, evt::KeyEvent)
     cbs = [m.cb1, m.cb2, m.cb3]
-    if evt.key == :tab || evt.key == :down
-        cbs[m.focus_idx].focused = false
-        m.focus_idx = mod1(m.focus_idx + 1, 3)
-        cbs[m.focus_idx].focused = true
-    elseif evt.key == :up
-        cbs[m.focus_idx].focused = false
-        m.focus_idx = mod1(m.focus_idx - 1, 3)
-        cbs[m.focus_idx].focused = true
-    else
-        handle_key!(cbs[m.focus_idx], evt)
+    @match (evt.key, evt.char) begin
+        (:tab, _) || (:down, _) => (cbs[m.focus_idx].focused = false; m.focus_idx = mod1(m.focus_idx + 1, 3); cbs[m.focus_idx].focused = true)
+        (:up, _)                => (cbs[m.focus_idx].focused = false; m.focus_idx = mod1(m.focus_idx - 1, 3); cbs[m.focus_idx].focused = true)
+        _                       => handle_key!(cbs[m.focus_idx], evt)
     end
 end
 function view(m::_M, f::Frame)
@@ -818,15 +813,18 @@ Task statuses: `task_pending`, `task_running`, `task_done`, `task_error`, `task_
 Tab/Shift-Tab navigation manager — cycles focus between panes or widgets (see [Input & Events](events.md#FocusRing) for the full example):
 
 <!-- tachi:app focusring_widget_demo w=50 h=12 frames=120 fps=15
+using Match
 @kwdef mutable struct _M <: Model
     quit::Bool = false; tick::Int = 0
     ring::FocusRing = FocusRing([:input, :options, :output])
 end
 should_quit(m::_M) = m.quit
 function update!(m::_M, evt::KeyEvent)
-    if evt.key == :tab; next!(m.ring)
-    elseif evt.key == :backtab; prev!(m.ring)
-    elseif evt.key == :escape; m.quit = true
+    @match (evt.key, evt.char) begin
+        (:tab, _)     => next!(m.ring)
+        (:backtab, _) => prev!(m.ring)
+        (:escape, _)  => (m.quit = true)
+        _             => nothing
     end
 end
 function view(m::_M, f::Frame)

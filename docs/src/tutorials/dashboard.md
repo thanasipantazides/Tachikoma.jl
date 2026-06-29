@@ -12,6 +12,7 @@ A dashboard with four sections: CPU/memory gauges, network sparklines, a process
 
 ```julia
 using Tachikoma
+using Match
 @tachikoma_app
 
 @kwdef mutable struct Dashboard <: Model
@@ -59,14 +60,11 @@ PROCS = [
 
 ```julia
 function update!(m::Dashboard, evt::KeyEvent)
-    if evt.key == :char && evt.char == 'q'
-        m.quit = true
-    elseif evt.key == :up
-        m.log_selected = max(1, m.log_selected - 1)
-    elseif evt.key == :down
-        m.log_selected = min(length(LOGS), m.log_selected + 1)
-    elseif evt.key == :escape
-        m.quit = true
+    @match (evt.key, evt.char) begin
+        (:char, 'q') || (:escape, _) => (m.quit = true)
+        (:up, _)                     => (m.log_selected = max(1, m.log_selected - 1))
+        (:down, _)                   => (m.log_selected = min(length(LOGS), m.log_selected + 1))
+        _                            => nothing
     end
 end
 ```

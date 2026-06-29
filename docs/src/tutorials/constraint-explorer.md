@@ -49,6 +49,7 @@ The `adjust` function modifies a constraint's value while preserving its type. E
 
 ```julia
 using Tachikoma
+using Match
 @tachikoma_app
 
 adjust(c::Fixed, d::Int)   = Fixed(max(c.size + d, 0))
@@ -86,32 +87,36 @@ The model tracks:
 
 ```julia
 function update!(m::ExplorerModel, evt::KeyEvent)
-    evt.key == :escape && (m.quit = true; return)
-
-    if evt.key == :right
-        n = length(m.constraints)
-        n > 0 && (m.selected_index = mod1(m.selected_index + 1, n))
-    elseif evt.key == :left
-        n = length(m.constraints)
-        n > 0 && (m.selected_index = mod1(m.selected_index - 1, n))
-    elseif evt.key == :up && !isempty(m.constraints)
-        m.constraints[m.selected_index] = adjust(m.constraints[m.selected_index], 1)
-    elseif evt.key == :down && !isempty(m.constraints)
-        m.constraints[m.selected_index] = adjust(m.constraints[m.selected_index], -1)
-    elseif evt.key == :char && evt.char == '+'
-        m.spacing = min(m.spacing + 1, 20)
-    elseif evt.key == :char && evt.char == '-'
-        m.spacing = max(m.spacing - 1, -5)
-    elseif evt.key == :char && evt.char in '1':'5' && !isempty(m.constraints)
-        types = [v -> Min(v), v -> Max(v), v -> Fixed(v), v -> Percent(v), v -> Fill(v)]
-        m.constraints[m.selected_index] = types[evt.char - '0'](m.value)
-    elseif evt.key == :char && evt.char == 'a'
-        idx = m.selected_index + 1
-        insert!(m.constraints, idx, Fixed(m.value))
-        m.selected_index = idx
-    elseif evt.key == :char && evt.char == 'x' && length(m.constraints) > 1
-        deleteat!(m.constraints, m.selected_index)
-        m.selected_index = clamp(m.selected_index, 1, length(m.constraints))
+    @match (evt.key, evt.char) begin
+        (:escape, _) => (m.quit = true)
+        (:right, _) => begin
+            n = length(m.constraints)
+            n > 0 && (m.selected_index = mod1(m.selected_index + 1, n))
+        end
+        (:left, _) => begin
+            n = length(m.constraints)
+            n > 0 && (m.selected_index = mod1(m.selected_index - 1, n))
+        end
+        (:up, _) => !isempty(m.constraints) &&
+            (m.constraints[m.selected_index] = adjust(m.constraints[m.selected_index], 1))
+        (:down, _) => !isempty(m.constraints) &&
+            (m.constraints[m.selected_index] = adjust(m.constraints[m.selected_index], -1))
+        (:char, '+') => (m.spacing = min(m.spacing + 1, 20))
+        (:char, '-') => (m.spacing = max(m.spacing - 1, -5))
+        (:char, _) where '1' <= evt.char <= '5' => !isempty(m.constraints) && begin
+            types = [v -> Min(v), v -> Max(v), v -> Fixed(v), v -> Percent(v), v -> Fill(v)]
+            m.constraints[m.selected_index] = types[evt.char - '0'](m.value)
+        end
+        (:char, 'a') => begin
+            idx = m.selected_index + 1
+            insert!(m.constraints, idx, Fixed(m.value))
+            m.selected_index = idx
+        end
+        (:char, 'x') => length(m.constraints) > 1 && begin
+            deleteat!(m.constraints, m.selected_index)
+            m.selected_index = clamp(m.selected_index, 1, length(m.constraints))
+        end
+        _ => nothing
     end
 end
 ```

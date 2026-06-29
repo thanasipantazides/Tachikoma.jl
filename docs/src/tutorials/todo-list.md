@@ -12,6 +12,7 @@ A two-pane app: a scrollable list of todo items on top with checkboxes that can 
 
 ```julia
 using Tachikoma
+using Match
 @tachikoma_app
 
 @enum Status Todo Completed
@@ -90,12 +91,10 @@ The list is rebuilt after toggling because `ListItem` objects are immutable — 
 
 ```julia
 function update!(m::TodoModel, evt::KeyEvent)
-    if evt.key == :escape
-        m.quit = true
-    elseif evt.key == :enter || (evt.key == :char && evt.char == ' ')
-        toggle_status!(m)
-    else
-        handle_key!(m.list, evt)
+    @match (evt.key, evt.char) begin
+        (:escape, _)            => (m.quit = true)
+        (:enter, _) || (:char, ' ') => toggle_status!(m)
+        _                       => handle_key!(m.list, evt)
     end
 end
 ```

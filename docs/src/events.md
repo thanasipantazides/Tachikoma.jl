@@ -40,20 +40,14 @@ The `action` field defaults to `key_press` — existing code that constructs `Ke
 <!-- tachi:noeval -->
 ```julia
 function update!(m::MyApp, evt::KeyEvent)
-    if evt.key == :char
-        if evt.char == 'q'
-            m.quit = true
-        elseif evt.char == '+'
-            m.count += 1
-        end
-    elseif evt.key == :up
-        m.selected -= 1
-    elseif evt.key == :down
-        m.selected += 1
-    elseif evt.key == :enter
-        do_action!(m)
-    elseif evt.key == :escape
-        m.quit = true
+    @match (evt.key, evt.char) begin
+        (:char, 'q')   => (m.quit = true)
+        (:char, '+')   => (m.count += 1)
+        (:up, _)       => (m.selected -= 1)
+        (:down, _)     => (m.selected += 1)
+        (:enter, _)    => do_action!(m)
+        (:escape, _)   => (m.quit = true)
+        _              => nothing
     end
 end
 ```
@@ -68,12 +62,10 @@ Ctrl keys arrive as `:ctrl` with the character:
 <!-- tachi:noeval -->
 ```julia
 function update!(m::MyApp, evt::KeyEvent)
-    if evt.key == :ctrl
-        if evt.char == 'r'        # Ctrl+R
-            reset!(m)
-        elseif evt.char == 'f'    # Ctrl+F
-            search!(m)
-        end
+    @match (evt.key, evt.char) begin
+        (:ctrl, 'r')   => reset!(m)    # Ctrl+R
+        (:ctrl, 'f')   => search!(m)   # Ctrl+F
+        _              => nothing
     end
 end
 ```
@@ -168,6 +160,7 @@ handle_mouse!(widget, evt::MouseEvent, area::Rect) → Bool
 
 ```julia
 using Tachikoma
+using Match
 @tachikoma_app
 
 @kwdef mutable struct FocusRingDemo <: Model
@@ -179,12 +172,11 @@ end
 should_quit(m::FocusRingDemo) = m.quit
 
 function update!(m::FocusRingDemo, evt::KeyEvent)
-    if evt.key == :tab
-        next!(m.ring)
-    elseif evt.key == :backtab
-        prev!(m.ring)
-    elseif evt.key == :escape
-        m.quit = true
+    @match (evt.key, evt.char) begin
+        (:tab, _)      => next!(m.ring)
+        (:backtab, _)  => prev!(m.ring)
+        (:escape, _)   => (m.quit = true)
+        _              => nothing
     end
 end
 

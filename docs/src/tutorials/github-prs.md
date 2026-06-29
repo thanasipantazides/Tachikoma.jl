@@ -12,6 +12,7 @@ A `DataTable` showing open pull requests for a GitHub repository, fetched asynch
 
 ```julia
 using Tachikoma
+using Match
 @tachikoma_app
 
 struct PullRequest
@@ -144,29 +145,28 @@ If the task returned an exception, we switch to `ErrorState` and store the messa
 function update!(m::PRModel, evt::KeyEvent)
     if m.detail_idx > 0
         # Modal is open — Escape closes it, arrows scroll the markdown
-        if evt.key == :escape
-            m.detail_idx = 0
-        else
-            handle_key!(m.detail_pane, evt)
+        @match (evt.key, evt.char) begin
+            (:escape, _) => (m.detail_idx = 0)
+            _ => handle_key!(m.detail_pane, evt)
         end
         return
     end
 
     # No modal — handle table navigation and app keys
-    if evt.key == :escape
-        m.quit = true
-    elseif evt.key == :enter && m.loading == Loaded
-        idx = m.table.selected
-        if 1 <= idx <= length(m.pull_requests)
-            m.detail_idx = idx
-            pr = m.pull_requests[idx]
-            m.detail_pane = MarkdownPane(pr.body;
-                block=Block(title="$(pr.title)",
-                            border_style=tstyle(:border),
-                            title_style=tstyle(:title, bold=true)))
+    @match (evt.key, evt.char) begin
+        (:escape, _) => (m.quit = true)
+        (:enter, _) where m.loading == Loaded => begin
+            idx = m.table.selected
+            if 1 <= idx <= length(m.pull_requests)
+                m.detail_idx = idx
+                pr = m.pull_requests[idx]
+                m.detail_pane = MarkdownPane(pr.body;
+                    block=Block(title="$(pr.title)",
+                                border_style=tstyle(:border),
+                                title_style=tstyle(:title, bold=true)))
+            end
         end
-    else
-        handle_key!(m.table, evt)
+        _ => handle_key!(m.table, evt)
     end
 end
 ```

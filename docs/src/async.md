@@ -99,15 +99,15 @@ is_cancelled(token)  # → Bool
 Task results arrive in `update!` as `TaskEvent`s. Add a method that dispatches on the event's `id`:
 
 ```julia
+using Match
+
 function update!(m::MyModel, evt::TaskEvent)
-    if evt.id == :compute
-        if evt.value isa Exception
-            push!(m.results, "Error: $(evt.value)")
-        else
+    @match evt.id begin
+        :compute => evt.value isa Exception ?
+            push!(m.results, "Error: $(evt.value)") :
             push!(m.results, "Result: $(evt.value)")
-        end
-    elseif evt.id == :tick
-        m.timer_count += 1
+        :tick    => (m.timer_count += 1)
+        _        => nothing
     end
 end
 ```
@@ -158,6 +158,7 @@ A minimal app that spawns background computations:
 
 ```julia
 using Tachikoma
+using Match
 @tachikoma_app
 
 @kwdef mutable struct ComputeModel <: Model
@@ -172,25 +173,27 @@ should_quit(m::ComputeModel) = m.quit
 task_queue(m::ComputeModel) = m.tq
 
 function update!(m::ComputeModel, evt::KeyEvent)
-    if evt.key == :char && evt.char == 's'
-        m.task_count += 1
-        id = m.task_count
-        spawn_task!(m.tq, :work) do
-            sleep(0.5 + rand() * 2.0)
-            "Task #$id: result = $(sum(1:rand(1:1_000_000)))"
+    @match (evt.key, evt.char) begin
+        (:char, 's') => begin
+            m.task_count += 1
+            id = m.task_count
+            spawn_task!(m.tq, :work) do
+                sleep(0.5 + rand() * 2.0)
+                "Task #$id: result = $(sum(1:rand(1:1_000_000)))"
+            end
+            push!(m.log, "Spawned task #$id")
         end
-        push!(m.log, "Spawned task #$id")
+        (:escape, _) => (m.quit = true)
+        _            => nothing
     end
-    evt.key == :escape && (m.quit = true)
 end
 
 function update!(m::ComputeModel, evt::TaskEvent)
-    if evt.id == :work
-        if evt.value isa Exception
-            push!(m.log, "Failed: $(evt.value)")
-        else
+    @match evt.id begin
+        :work => evt.value isa Exception ?
+            push!(m.log, "Failed: $(evt.value)") :
             push!(m.log, evt.value)
-        end
+        _     => nothing
     end
 end
 
@@ -228,8 +231,9 @@ end
 
 # In update!:
 function update!(m::MyModel, evt::TaskEvent)
-    if evt.id == :risky && evt.value isa Exception
-        push!(m.errors, string(evt.value))
+    @match evt.id begin
+        :risky => evt.value isa Exception ? push!(m.errors, string(evt.value)) : nothing
+        _      => nothing
     end
 end
 ```
