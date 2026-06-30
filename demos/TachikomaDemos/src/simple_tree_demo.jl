@@ -54,7 +54,7 @@ function view(m::TreeState, f::Frame)
     innerL = render(Block(title="Tree", box=BOX_PLAIN), rects[1], f.buffer)
     innerR = render(Block(title="Debug", box=BOX_PLAIN), rects[2], f.buffer)
 
-    node_selection = Tachikoma.selected_node(m.tree)
+    node_selection = selected_node(m.tree)
     content_selection = isnothing(node_selection) ? nothing : node_selection.content
     spn = Paragraph("value: $(value(m.tree))\n\nselected node: $(node_selection)\n\nnode content: $(content_selection)", wrap=char_wrap)
 

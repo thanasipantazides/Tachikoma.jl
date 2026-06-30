@@ -453,7 +453,7 @@ Optionally store user data in TreeNodes (`TreeNode.content` will default to `not
 <!-- tachi:noeval -->
 ```julia
 root = TreeNode("Root", [
-    TreeNode("Child 1", [TreeNode("Leaf A"); content="Leaf A content"]; content=("Child 1 content", 1e-4, true))])
+    TreeNode("Child 1", [TreeNode("Leaf A"; content="Leaf A content")]; content=("Child 1 content", 1e-4, true))])
 ```
 
 ### TabBar
