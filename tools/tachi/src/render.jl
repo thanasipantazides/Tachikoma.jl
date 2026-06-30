@@ -24,7 +24,7 @@ function render_tach(opts::Dict{Symbol, Any})
     # Compress dead space
     if opts[:compress]
         printstyled("Compressing dead space...\n"; color=:cyan)
-        cells, ts, pixels = Tachikoma.compress_dead_space(cells, ts; pixel_snapshots=pixels)
+        cells, ts, pixels = Tachikoma.compress_dead_space(cells, ts, pixels)
         println("  → $(length(cells)) frames after compression")
     end
 

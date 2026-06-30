@@ -804,12 +804,16 @@ function _setup_export_modal!(overlay::AppOverlay, rec::CastRecorder)
     if !gif_extension_loaded()
         try enable_gif() catch end
     end
-    # Pre-select formats from saved preferences
-    overlay.export_selected = [
-        "gif" in EXPORT_FORMATS_PREF[],
-        "svg" in EXPORT_FORMATS_PREF[],
-    ]
+    # Availability: GIF needs the FreeTypeAbstraction + ColorTypes extension;
+    # SVG is pure-core and always available.
     overlay.export_available = [gif_extension_loaded(), true]
+    # Pre-select formats from saved preferences, but never pre-select a format
+    # that isn't available here — otherwise a pref carried over from a project
+    # that had the GIF deps would stay checked (just grayed) and silently fail.
+    overlay.export_selected = [
+        overlay.export_available[1] && "gif" in EXPORT_FORMATS_PREF[],
+        overlay.export_available[2] && "svg" in EXPORT_FORMATS_PREF[],
+    ]
     overlay.export_idx = 1
     # Resolve font index from saved preference
     fonts = discover_mono_fonts()
@@ -910,6 +914,11 @@ end
 function _do_exports_bg(config::ExportConfig, snap::RecordingSnapshot)
     # invokelatest is required because extension methods (TachikomaGifExt)
     # may have been defined after the world age captured by Threads.@spawn.
+    # Track what actually succeeds so the notification is honest — a thrown
+    # export (e.g. GIF extension not loaded) must not be reported as saved.
+    exported = String[".tach"]
+    failed = String[]
+
     if config.export_gif
         try
             Base.invokelatest(export_gif_from_snapshots,
@@ -918,8 +927,10 @@ function _do_exports_bg(config::ExportConfig, snap::RecordingSnapshot)
                               pixel_snapshots=snap.pixel_snapshots,
                               font_path=config.font_path,
                               default_fg=config.text_rgb)
+            push!(exported, ".gif")
         catch e
-            @warn "GIF export failed" exception=e
+            @warn "GIF export failed" exception=(e, catch_backtrace())
+            push!(failed, ".gif")
         end
     end
 
@@ -931,17 +942,18 @@ function _do_exports_bg(config::ExportConfig, snap::RecordingSnapshot)
                               font_family=config.svg_font_family,
                               font_path=config.svg_embed_font_path,
                               fg_color=config.svg_fg)
+            push!(exported, ".svg")
         catch e
-            @warn "SVG export failed" exception=e
+            @warn "SVG export failed" exception=(e, catch_backtrace())
+            push!(failed, ".svg")
         end
     end
 
-    # Build notification string
+    # Build notification string from what actually happened
     base_name = basename(config.base)
-    exported = String[".tach"]
-    config.export_gif && push!(exported, ".gif")
-    config.export_svg && push!(exported, ".svg")
-    "Saved: $base_name ($(join(exported, " ")))"
+    msg = "Saved: $base_name ($(join(exported, " ")))"
+    isempty(failed) || (msg *= "  — FAILED: $(join(failed, " "))")
+    msg
 end
 
 function dispatch_event!(t::Terminal, overlay::AppOverlay, model::Model,
