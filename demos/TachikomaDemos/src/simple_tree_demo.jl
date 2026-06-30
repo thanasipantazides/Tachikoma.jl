@@ -11,13 +11,13 @@ function build_tree()
     root = TreeNode("System", 
         [
             TreeNode("Component", 
-                [TreeNode("thing"), TreeNode("A"), TreeNode("C")]
+                [TreeNode("thing"), TreeNode("A"; content=0x32ab), TreeNode("C"; content="content of C")]
             ), 
             TreeNode("Component", 
-                [TreeNode("thing"), TreeNode("B"), TreeNode("D")]
+                [TreeNode("thing"; content="A string of content!"), TreeNode("B"), TreeNode("D"; content="content of D")]
             ), 
             TreeNode("Another component", 
-                [TreeNode("thing"), TreeNode("E")]
+                [TreeNode("thing"; content=-3.4e4), TreeNode("E"; content=Dict("a"=>1,"b"=>2, "c"=>3))]
             )
         ]
     )
@@ -28,7 +28,6 @@ end
     quit::Bool = false
     do_modal::Bool = false
     tick::UInt = 0
-    file::String = default_fsource
     counter::UInt64 = 0
     tree::TreeView = build_tree()
     outer_layout::ResizableLayout = ResizableLayout(Horizontal, [Fixed(30), Fill()])
@@ -55,7 +54,9 @@ function view(m::TreeState, f::Frame)
     innerL = render(Block(title="Tree", box=BOX_PLAIN), rects[1], f.buffer)
     innerR = render(Block(title="Debug", box=BOX_PLAIN), rects[2], f.buffer)
 
-    spn = Paragraph("value: $(value(m.tree))\nvalue_node: $(Tachikoma.value_node(m.tree))", wrap=char_wrap)
+    node_selection = Tachikoma.selected_node(m.tree)
+    content_selection = isnothing(node_selection) ? nothing : node_selection.content
+    spn = Paragraph("value: $(value(m.tree))\n\nselected node: $(node_selection)\n\nnode content: $(content_selection)", wrap=char_wrap)
 
     render(m.tree, innerL, f.buffer)
     render(spn, innerR, f.buffer)
