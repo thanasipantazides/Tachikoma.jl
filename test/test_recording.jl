@@ -72,6 +72,7 @@
         ])
         tv = T.TreeView(root; selected=2)
         @test T.value(tv) == 2
+        @test T.value_node(tv) === root.children[1]
     end
 
     @testset "value: Form" begin
@@ -146,9 +147,11 @@
         # Down moves to next
         T.handle_key!(tv, T.KeyEvent(:down))
         @test tv.selected == 2  # "a"
+        @test T.value_node(tv) === root.children[1] # "a"
         # Right on expanded node moves to first child
         T.handle_key!(tv, T.KeyEvent(:right))
         @test tv.selected == 3  # "a1"
+        @test T.value_node(tv) === root.children[1].children[1] # "a1"
     end
 
     @testset "TreeView collapse/expand" begin
@@ -173,9 +176,11 @@
         # Up from first wraps to last
         T.handle_key!(tv, T.KeyEvent(:up))
         @test tv.selected == 2
+        @test T.value_node(tv) === root.children[1]
         # Down from last wraps to first
         T.handle_key!(tv, T.KeyEvent(:down))
         @test tv.selected == 1
+        @test T.value_node(tv) === root
     end
 
     # ═════════════════════════════════════════════════════════════════

@@ -118,7 +118,7 @@ export # Core types
        # Widget protocol
        intrinsic_size, focusable, FocusRing, Container, WidgetScroll,
        next!, prev!, current, handle_key!,
-       value, set_value!, valid,
+       value, value_node, set_value!, valid,
        # Widgets
        BigText,
        Gauge, Sparkline, BarChart, BarEntry, Table,

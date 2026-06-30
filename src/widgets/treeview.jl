@@ -111,6 +111,11 @@ value(tv::TreeView) = tv.selected
 
 focusable(::TreeView) = true
 
+function value_node(tv::TreeView)::Union{Nothing, TreeNode}
+    # pick off the selected node using the selection index
+    return tv.selected == 0 ? nothing : _get_flat(tv)[tv.selected].node
+end
+
 function handle_key!(tv::TreeView, evt::KeyEvent)::Bool
     flat = _get_flat(tv)
     n = length(flat)
